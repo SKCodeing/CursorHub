@@ -277,6 +277,11 @@
             let result = await window.api.resetCursorAccount(JSON.parse(JSON.stringify(account)));
             useAccountDialogVisible.value = false;
             if (result.success) {
+                // 标记账号已使用
+                await window.api.accounts.createOrUpdateAccount({
+                    email: account.email,
+                    used_at: Date.now(),
+                });
                 ElMessage.success("切换账号成功");
             } else {
                 ElMessage.error("切换账号失败");

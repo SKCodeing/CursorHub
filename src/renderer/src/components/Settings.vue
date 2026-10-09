@@ -1,7 +1,7 @@
 <script setup>
     import { useAppStore } from "../stores/app.js";
     import { storeToRefs } from "pinia";
-    import { ref, onMounted } from "vue";
+    import { ref, onMounted, onUnmounted } from "vue";
     import { ElMessage } from "element-plus";
 
     const formRef = ref(null);
@@ -24,15 +24,55 @@
         RECEIVING_EMAIL_PIN: "",
     });
 
+    // ── 自动换号状态 ───────────────────────────────────────────
+    const autoSwitchEnabled = ref(false);
+    const autoSwitchStats = ref({
+        currentEmail: "",
+        todaySwitchCount: 0,
+        lastSwitchTime: "",
+    });
+
+    let unsubAutoSwitch = null;
+
+    const loadAutoSwitchStats = async () => {
+        const stats = await window.api.getAutoSwitchStats();
+        autoSwitchEnabled.value = stats.enabled;
+        autoSwitchStats.value = stats;
+    };
+
+    const toggleAutoSwitch = async (val) => {
+        await window.api.setAutoSwitch(val);
+        autoSwitchEnabled.value = val;
+        ElMessage.success(val ? "自动换号已开启" : "自动换号已关闭");
+    };
+
+    // ──────────────────────────────────────────────────────────
+
     const updateConfig = () => {
         if (appConfig.value) {
             localConfig.value = JSON.parse(JSON.stringify(appConfig.value));
-            formRef.value.clearValidate();
+            formRef.value?.clearValidate();
         }
     };
 
     onMounted(() => {
         updateConfig();
+        loadAutoSwitchStats();
+        // 监听自动换号事件，实时刷新统计
+        unsubAutoSwitch = window.api.onAutoSwitchEvent(({ channel, data }) => {
+            if (channel === "auto-switched") {
+                autoSwitchStats.value.currentEmail = data.email;
+                autoSwitchStats.value.todaySwitchCount = data.todaySwitchCount;
+                autoSwitchStats.value.lastSwitchTime = data.lastSwitchTime;
+                ElMessage.success(`已自动切换到: ${data.email}`);
+            } else if (channel === "auto-switch-failed") {
+                ElMessage.warning("自动换号失败：账号池已耗尽");
+            }
+        });
+    });
+
+    onUnmounted(() => {
+        unsubAutoSwitch?.();
     });
 
     defineExpose({
@@ -70,6 +110,43 @@
 
 <template>
     <div v-if="localConfig" class="settings-container">
+
+        <!-- 自动换号卡片 -->
+        <div class="auto-switch-card">
+            <div class="auto-switch-header">
+                <div>
+                    <div class="card-title">自动换号</div>
+                    <div class="card-desc">用量耗尽自动切换账号 · 套餐模型：Auto</div>
+                </div>
+                <div class="switch-wrap">
+                    <span class="switch-label">{{ autoSwitchEnabled ? "已开启" : "已关闭" }}</span>
+                    <el-switch
+                        :model-value="autoSwitchEnabled"
+                        :active-color="'#67c23a'"
+                        @change="toggleAutoSwitch"
+                    />
+                </div>
+            </div>
+            <div class="auto-switch-body">
+                <div class="stat-item">
+                    <div class="stat-label">当前邮箱</div>
+                    <div class="stat-value highlight">{{ autoSwitchStats.currentEmail || "—" }}</div>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-item">
+                        <div class="stat-label">今日换号次数</div>
+                        <div class="stat-value">{{ autoSwitchStats.todaySwitchCount ?? 0 }}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">上次换号时间</div>
+                        <div class="stat-value highlight">{{ autoSwitchStats.lastSwitchTime || "—" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <el-divider />
+
         <el-form ref="formRef" :model="localConfig" :rules="rules" label-width="150px" style="max-width: 450px">
             <el-form-item label="域名" prop="EMAIL_DOMAIN">
                 <el-input v-model="localConfig.EMAIL_DOMAIN" placeholder="个人域名 例：flyxx.com 阿里云1元购买" />
@@ -111,5 +188,66 @@
         label {
             color: var(--ev-c-text-1);
         }
+    }
+
+    /* 自动换号卡片 */
+    .auto-switch-card {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+        max-width: 500px;
+    }
+    .auto-switch-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+    .card-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #e0e0e0;
+    }
+    .card-desc {
+        font-size: 12px;
+        color: #999;
+        margin-top: 2px;
+    }
+    .switch-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .switch-label {
+        font-size: 12px;
+        color: #999;
+    }
+    .auto-switch-body {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .stat-row {
+        display: flex;
+        gap: 32px;
+    }
+    .stat-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .stat-label {
+        font-size: 12px;
+        color: #999;
+    }
+    .stat-value {
+        font-size: 14px;
+        color: #e0e0e0;
+    }
+    .stat-value.highlight {
+        color: #67c23a;
+        font-weight: 500;
     }
 </style>

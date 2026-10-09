@@ -812,20 +812,21 @@
                     </template>
                 </el-table-column>
 
-                <el-table-column label="订阅状态" width="100" align="center">
+                <el-table-column label="使用状态" width="90" align="center">
                     <template #default="scope">
                         <el-tag
-                            v-if="scope.row.membershipTypeShow"
+                            v-if="scope.row.used_at"
                             size="small"
-                            :type="
-                                scope.row.remainingDays > 7
-                                    ? 'success'
-                                    : scope.row.remainingDays > 3
-                                      ? 'warning'
-                                      : 'danger'
-                            "
+                            type="info"
                         >
-                            {{ scope.row.membershipTypeShow }}
+                            已使用
+                        </el-tag>
+                        <el-tag
+                            v-else
+                            size="small"
+                            type="success"
+                        >
+                            未使用
                         </el-tag>
                     </template>
                 </el-table-column>
