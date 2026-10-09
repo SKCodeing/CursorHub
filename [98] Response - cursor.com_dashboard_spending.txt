@@ -1,0 +1,30 @@
+HTTP/1.1 200 OK
+Accept-Ch: Sec-CH-UA-Arch, Sec-CH-UA-Platform, Sec-CH-UA-Platform-Version, Sec-CH-UA-Bitness
+Age: 0
+Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate
+Content-Encoding: br
+Content-Type: text/x-component
+Date: Thu, 08 Oct 2026 15:44:54 GMT
+Referrer-Policy: strict-origin-when-cross-origin
+Server: Vercel
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+Vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-Matched-Path: /dashboard/[tab]/[[...rest]].rsc
+X-Nextjs-Deployment-Id: dpl_7oZNEs1jdnS4t5hAhJrNHzv5Wb6D
+X-Permitted-Cross-Domain-Policies: none
+X-User-Country: CN
+X-Vercel-Cache: MISS
+X-Vercel-Id: sin1::iad1::fm5n5-1791474294640-623de4622b2b
+X-Xss-Protection: 1; mode=block
+Transfer-Encoding: chunked
+
+1:"$Sreact.fragment"
+2:I[8553369,["/_next/static/immutable/chunks/3ao--h7c5k7jr.js"],"ViewportBoundary"]
+4:I[8553369,["/_next/static/immutable/chunks/3ao--h7c5k7jr.js"],"MetadataBoundary"]
+5:"$Sreact.suspense"
+0:{"f":[[["",{"children":["(main)",{"children":["dashboard",{"children":[["tab","spending","d",null],{"children":[["rest","","oc",null],{"children":["__PAGE__",{},"$undefined","$undefined",4096]},"$undefined","$undefined",4096]},"$undefined","$undefined",4096]},"$undefined","$undefined",4096]},"$undefined","$undefined",4112]},"$undefined","$undefined",4112],null,["$","$1","h",{"children":[null,["$","$L2","U4Mj3RweVzjicirXkJbHGv",{"children":"$L3"}],["$","div","U4Mj3RweVzjicirXkJbHGm",{"hidden":true,"children":["$","$L4",null,{"children":["$","$5",null,{"name":"Next.Metadata","children":"$L6"}]}]}]]}],false]],"q":"","i":false,"S":false,"h":null,"r":"$undefined"}
+3:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1, interactive-widget=resizes-content"}],["$","meta","2",{"name":"theme-color","content":"#f7f7f7","media":"(prefers-color-scheme: light)"}],["$","meta","3",{"name":"theme-color","content":"#141414","media":"(prefers-color-scheme: dark)"}]]
+7:I[705715,["/_next/static/immutable/chunks/3ao--h7c5k7jr.js"],"IconMark"]
+6:[["$","title","0",{"children":"Cursor - The best way to code with AI"}],["$","meta","1",{"name":"description","content":"Built to make you extraordinarily productive, Cursor is the best way to code with AI."}],["$","link","2",{"rel":"manifest","href":"/site.webmanifest","crossOrigin":"$undefined"}],["$","meta","3",{"name":"msapplication-TileColor","content":"#14120b"}],["$","meta","4",{"name":"msapplication-TileImage","content":"/pwa/icon-144x144.png"}],["$","meta","5",{"name":"mobile-web-app-capable","content":"yes"}],["$","meta","6",{"name":"apple-mobile-web-app-title","content":"Cursor"}],["$","meta","7",{"name":"apple-mobile-web-app-status-bar-style","content":"default"}],["$","meta","8",{"property":"og:title","content":"Cursor - The best way to code with AI"}],["$","meta","9",{"property":"og:description","content":"Built to make you extraordinarily productive, Cursor is the best way to code with AI."}],["$","meta","10",{"property":"og:image","content":"https://cursor.com/_next/static/immutable/media/home-opengraph.3m_z2h5ijg9n9.png"}],["$","meta","11",{"property":"og:image:width","content":"2401"}],["$","meta","12",{"property":"og:image:height","content":"1260"}],["$","meta","13",{"property":"og:image:alt","content":"Cursor - The best way to code with AI"}],["$","meta","14",{"name":"twitter:card","content":"summary_large_image"}],["$","meta","15",{"name":"twitter:title","content":"Cursor - The best way to code with AI"}],["$","meta","16",{"name":"twitter:description","content":"Built to make you extraordinarily productive, Cursor is the best way to code with AI."}],["$","meta","17",{"name":"twitter:image","content":"https://cursor.com/_next/static/immutable/media/home-twitter.1lac4t780p6m1.png"}],["$","meta","18",{"name":"twitter:image:alt","content":"Cursor - The best way to code with AI"}],["$","meta","19",{"name":"twitter:image:width","content":"1200"}],["$","meta","20",{"name":"twitter:image:height","content":"630"}],["$","link","21",{"rel":"icon","href":"/favicon.svg","type":"image/svg+xml"}],["$","link","22",{"rel":"icon","href":"/favicon.ico","sizes":"any"}],["$","link","23",{"rel":"icon","href":"/pwa/icon-192x192.png","sizes":"192x192","type":"image/png"}],["$","link","24",{"rel":"icon","href":"/pwa/icon-512x512.png","sizes":"512x512","type":"image/png"}],["$","link","25",{"rel":"apple-touch-icon","href":"/pwa/apple-touch-icon.png","sizes":"180x180","type":"image/png"}],["$","link","26",{"rel":"mask-icon","href":"/favicon.svg"}],["$","$L7","27",{}]]

@@ -1,0 +1,23 @@
+HTTP/1.1 200 OK
+Accept-Ch: Sec-CH-UA-Arch, Sec-CH-UA-Platform, Sec-CH-UA-Platform-Version, Sec-CH-UA-Bitness
+Age: 0
+Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate
+Content-Encoding: br
+Content-Type: text/x-component
+Date: Thu, 08 Oct 2026 15:44:53 GMT
+Referrer-Policy: strict-origin-when-cross-origin
+Server: Vercel
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+Vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-Matched-Path: /dashboard/[tab]/[[...rest]].rsc
+X-Nextjs-Deployment-Id: dpl_7oZNEs1jdnS4t5hAhJrNHzv5Wb6D
+X-Permitted-Cross-Domain-Policies: none
+X-User-Country: CN
+X-Vercel-Cache: MISS
+X-Vercel-Id: sin1::iad1::925t6-1791474292740-087afb608ae3
+X-Xss-Protection: 1; mode=block
+Transfer-Encoding: chunked
+
+0:{"f":[[["",{"children":["(main)",{"children":["dashboard",{"children":[["tab","spending","d",null],{"children":[["rest","","oc",null],{"children":["__PAGE__",{},"$undefined","$undefined",4096]},"$undefined","$undefined",4096]},"$undefined","$undefined",4096]},"$undefined","$undefined",4096]},"$undefined","$undefined",4112]},"$undefined","$undefined",4112],null,[null,null],true]],"q":"","i":false,"S":false,"h":null,"r":"$undefined"}
