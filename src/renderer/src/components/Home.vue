@@ -795,60 +795,6 @@
                                 </div>
 
                                 <el-tooltip
-                                    :visible="
-                                        !appConfig.EMAIL_DOMAIN ||
-                                        !appConfig.RECEIVING_EMAIL ||
-                                        !appConfig.RECEIVING_EMAIL_PIN
-                                            ? undefined
-                                            : false
-                                    "
-                                    content="设置域名后启用注册功能"
-                                    effect="customized"
-                                    placement="right"
-                                >
-                                    <p class="card-item check-item">
-                                        <span class="card-item-label">设置域名和收验证码邮箱</span>
-                                        <span
-                                            v-if="
-                                                appConfig.EMAIL_DOMAIN &&
-                                                appConfig.RECEIVING_EMAIL &&
-                                                appConfig.RECEIVING_EMAIL_PIN
-                                            "
-                                        >
-                                            <el-icon class="check-icon" :size="20" style="color: #67c23a"
-                                                ><CircleCheck
-                                            /></el-icon>
-                                        </span>
-                                        <span v-else>
-                                            <el-icon class="check-icon" :size="20" style="color: #f56c6c"
-                                                ><WarningFilled
-                                            /></el-icon>
-                                        </span>
-                                    </p>
-                                </el-tooltip>
-
-                                <el-tooltip
-                                    :visible="!isAdmin ? undefined : false"
-                                    content="请以管理员身份启动，否则功能受限"
-                                    effect="customized"
-                                    placement="right"
-                                >
-                                    <p class="card-item check-item">
-                                        <span class="card-item-label">以管理员身份启动</span>
-                                        <span v-if="isAdmin">
-                                            <el-icon class="check-icon" :size="20" style="color: #67c23a"
-                                                ><CircleCheck
-                                            /></el-icon>
-                                        </span>
-                                        <span v-else>
-                                            <el-icon class="check-icon" :size="20" style="color: #f56c6c"
-                                                ><WarningFilled
-                                            /></el-icon>
-                                        </span>
-                                    </p>
-                                </el-tooltip>
-
-                                <el-tooltip
                                     :visible="!appConfig.path_cursor_exe ? undefined : false"
                                     content="未找到Cursor安装路径，打开Cursor后点击刷新重新查找"
                                     effect="customized"
@@ -890,55 +836,6 @@
                                     </p>
                                 </el-tooltip>
 
-                                <el-tooltip
-                                    :visible="!appConfig.path_chrome ? undefined : false"
-                                    content="未找到浏览器路径，注册功能可能失败"
-                                    effect="customized"
-                                    placement="right"
-                                >
-                                    <p class="card-item check-item">
-                                        <span class="card-item-label">获取 Chrome 浏览器路径</span>
-                                        <span v-if="appConfig.path_chrome">
-                                            <el-icon class="check-icon" :size="20" style="color: #67c23a"
-                                                ><CircleCheck
-                                            /></el-icon>
-                                        </span>
-                                        <span v-else>
-                                            <el-icon class="check-icon" :size="20" style="color: #f56c6c"
-                                                ><WarningFilled
-                                            /></el-icon>
-                                        </span>
-                                    </p>
-                                </el-tooltip>
-                                <p class="card-item btn-item">
-                                    <span class="card-item-label">一键注册登录</span>
-                                    <el-button
-                                        v-if="loadingAutoRegister && isAutoRegistAndLogin === true"
-                                        @click="cancelAutoRegister"
-                                    >
-                                        取消
-                                    </el-button>
-                                    <el-button
-                                        :loading="loadingAutoRegister && isAutoRegistAndLogin === true"
-                                        @click="autoRegisterAndLogin"
-                                        >一键注册登录</el-button
-                                    >
-                                </p>
-
-                                <p class="card-item btn-item">
-                                    <span class="card-item-label">自动注册账号</span>
-                                    <el-button
-                                        v-if="loadingAutoRegister && isAutoRegistAndLogin === false"
-                                        @click="cancelAutoRegister"
-                                    >
-                                        取消
-                                    </el-button>
-                                    <el-button
-                                        :loading="loadingAutoRegister && isAutoRegistAndLogin === false"
-                                        @click="autoRegister"
-                                        >批量自动注册</el-button
-                                    >
-                                </p>
                                 <p class="card-item btn-item">
                                     <span class="card-item-label">重置机器码</span>
                                     <el-button @click="resetMachine">重置机器码</el-button>
@@ -1033,7 +930,7 @@
 
                         <div class="license-display">
                             <div>Fly Cursor {{ versionText }}</div>
-                            <div>联系QQ：3663856429</div>
+                            <div>联系QQ：807600577</div>
                             <div v-if="signatureText">{{ signatureText }}</div>
                         </div>
                     </div>
