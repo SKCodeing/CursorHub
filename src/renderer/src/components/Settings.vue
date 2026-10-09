@@ -31,7 +31,6 @@
         todaySwitchCount: 0,
         lastSwitchTime: "",
     });
-
     let unsubAutoSwitch = null;
 
     const loadAutoSwitchStats = async () => {
@@ -46,6 +45,69 @@
         ElMessage.success(val ? "自动换号已开启" : "自动换号已关闭");
     };
 
+    // ── 注入状态 ───────────────────────────────────────────────
+    const patchStatus = ref({ patched: false, targetExists: false, backupExists: false });
+    const patchLoading = ref(false);
+
+    const loadPatchStatus = async () => {
+        const status = await window.api.getPatchStatus();
+        patchStatus.value = status;
+    };
+
+    const handleApplyPatch = async () => {
+        patchLoading.value = true;
+        try {
+            const result = await window.api.applyPatch();
+            if (result.success) {
+                ElMessage.success(result.message);
+            } else {
+                ElMessage.error(result.message);
+            }
+            await loadPatchStatus();
+        } finally {
+            patchLoading.value = false;
+        }
+    };
+
+    const handleRestorePatch = async () => {
+        patchLoading.value = true;
+        try {
+            const result = await window.api.restorePatch();
+            if (result.success) {
+                ElMessage.success(result.message);
+            } else {
+                ElMessage.error(result.message);
+            }
+            await loadPatchStatus();
+        } finally {
+            patchLoading.value = false;
+        }
+    };
+
+    // ── 禁用 Cursor 更新 ───────────────────────────────────────
+    const disableUpdateEnabled = ref(false);
+    const disableUpdateLoading = ref(false);
+
+    const loadDisableUpdateStatus = async () => {
+        const result = await window.api.getDisableUpdateStatus();
+        disableUpdateEnabled.value = result.disabled;
+    };
+
+    const toggleDisableUpdate = async (val) => {
+        disableUpdateLoading.value = true;
+        try {
+            const result = await window.api.setDisableUpdate(val);
+            if (result.success) {
+                disableUpdateEnabled.value = val;
+                ElMessage.success(val ? "已禁用 Cursor 自动更新" : "已恢复 Cursor 自动更新");
+            } else {
+                ElMessage.error(result.message || "操作失败");
+            }
+        } finally {
+            disableUpdateLoading.value = false;
+        }
+    };
+
     // ──────────────────────────────────────────────────────────
 
     const updateConfig = () => {
@@ -58,7 +120,9 @@
     onMounted(() => {
         updateConfig();
         loadAutoSwitchStats();
-        // 监听自动换号事件，实时刷新统计
+        loadPatchStatus();
+        loadDisableUpdateStatus();
+
         unsubAutoSwitch = window.api.onAutoSwitchEvent(({ channel, data }) => {
             if (channel === "auto-switched") {
                 autoSwitchStats.value.currentEmail = data.email;
@@ -75,9 +139,7 @@
         unsubAutoSwitch?.();
     });
 
-    defineExpose({
-        updateConfig,
-    });
+    defineExpose({ updateConfig });
 
     const saveConfig = async () => {
         if (!formRef.value) return;
@@ -88,11 +150,10 @@
         }
 
         const newConfig = JSON.parse(JSON.stringify(localConfig.value));
-
         try {
             let setResult = await window.api.setAppConfig(newConfig);
             if (setResult.success) {
-                ElMessage.success(`修改配置成功`);
+                ElMessage.success("修改配置成功");
                 await appStore.fetchAppConfig();
             } else {
                 ElMessage.error("修改配置失败");
@@ -111,42 +172,116 @@
 <template>
     <div v-if="localConfig" class="settings-container">
 
-        <!-- 自动换号卡片 -->
-        <div class="auto-switch-card">
-            <div class="auto-switch-header">
-                <div>
-                    <div class="card-title">自动换号</div>
-                    <div class="card-desc">用量耗尽自动切换账号 · 套餐模型：Auto</div>
+        <!-- 无感换号卡片 -->
+        <div class="feature-card">
+            <div class="feature-card-header">
+                <div class="header-left">
+                    <div class="section-bar"></div>
+                    <span class="card-title">无感换号</span>
                 </div>
-                <div class="switch-wrap">
-                    <span class="switch-label">{{ autoSwitchEnabled ? "已开启" : "已关闭" }}</span>
+            </div>
+
+            <!-- 注入状态行 -->
+            <div class="feature-row">
+                <div class="feature-info">
+                    <span class="feature-label">注入状态</span>
+                    <el-tag
+                        :type="patchStatus.patched ? 'success' : 'info'"
+                        size="small"
+                        style="margin-left: 8px"
+                    >
+                        {{ patchStatus.patched ? "已注入" : "未注入" }}
+                    </el-tag>
+                </div>
+                <div class="feature-actions">
+                    <el-button
+                        v-if="!patchStatus.patched"
+                        type="primary"
+                        size="small"
+                        :loading="patchLoading"
+                        :disabled="!patchStatus.targetExists"
+                        @click="handleApplyPatch"
+                    >
+                        开启无感换号
+                    </el-button>
+                    <el-button
+                        v-else
+                        type="danger"
+                        size="small"
+                        plain
+                        :loading="patchLoading"
+                        @click="handleRestorePatch"
+                    >
+                        关闭无感换号
+                    </el-button>
+                </div>
+            </div>
+
+            <!-- 无 Cursor 文件时的提示 -->
+            <div v-if="!patchStatus.targetExists" class="tip-box tip-warning">
+                未找到 Cursor 安装文件，请确认 Cursor 已安装到默认路径
+            </div>
+
+            <template v-if="patchStatus.patched">
+                <div class="tip-box">开启后请保持 AI助手在后台运行，请不要完全退出，否则自动换号将无法生效。</div>
+                <div class="tip-box">换号后请稍等几秒，或新开一个对话再试。若仍提示额度不足：关闭无感后重新获取账号登录。</div>
+
+                <!-- 自动换号开关 -->
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-title">额度用尽时自动换号</div>
+                        <div class="toggle-desc">
+                            默认关闭；开启后聊天出现 usage limit 或官方用量达标将自动换号（可能中断正在进行的 Agent/对话），关闭则需手动点「获取账号并登录」
+                        </div>
+                    </div>
                     <el-switch
                         :model-value="autoSwitchEnabled"
-                        :active-color="'#67c23a'"
                         @change="toggleAutoSwitch"
                     />
                 </div>
-            </div>
-            <div class="auto-switch-body">
-                <div class="stat-item">
-                    <div class="stat-label">当前邮箱</div>
-                    <div class="stat-value highlight">{{ autoSwitchStats.currentEmail || "—" }}</div>
-                </div>
-                <div class="stat-row">
+
+                <!-- 统计信息 -->
+                <div v-if="autoSwitchEnabled" class="stat-row">
                     <div class="stat-item">
-                        <div class="stat-label">今日换号次数</div>
-                        <div class="stat-value">{{ autoSwitchStats.todaySwitchCount ?? 0 }}</div>
+                        <div class="stat-label">当前邮箱</div>
+                        <div class="stat-value highlight">{{ autoSwitchStats.currentEmail || "—" }}</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-label">上次换号时间</div>
+                        <div class="stat-label">今日换号</div>
+                        <div class="stat-value">{{ autoSwitchStats.todaySwitchCount ?? 0 }} 次</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">上次换号</div>
                         <div class="stat-value highlight">{{ autoSwitchStats.lastSwitchTime || "—" }}</div>
                     </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- 禁用 Cursor 更新卡片 -->
+        <div class="feature-card">
+            <div class="toggle-row">
+                <div>
+                    <div class="toggle-title">禁用 Cursor 更新</div>
+                    <div class="toggle-desc">写入 update.mode=none，避免升级覆盖指纹补丁</div>
+                </div>
+                <div class="switch-with-label">
+                    <span class="switch-status-label" :class="{ active: disableUpdateEnabled }">
+                        {{ disableUpdateEnabled ? "已开启" : "已关闭" }}
+                    </span>
+                    <el-switch
+                        :model-value="disableUpdateEnabled"
+                        :loading="disableUpdateLoading"
+                        active-color="#67c23a"
+                        @change="toggleDisableUpdate"
+                    />
                 </div>
             </div>
         </div>
 
         <el-divider />
 
+        <!-- 邮箱配置表单 -->
         <el-form ref="formRef" :model="localConfig" :rules="rules" label-width="150px" style="max-width: 450px">
             <el-form-item label="域名" prop="EMAIL_DOMAIN">
                 <el-input v-model="localConfig.EMAIL_DOMAIN" placeholder="个人域名 例：flyxx.com 阿里云1元购买" />
@@ -179,73 +314,157 @@
     .settings-container {
         padding: 20px;
     }
+
     .open-link {
         color: var(--el-color-primary);
         cursor: pointer;
         text-decoration: underline;
     }
+
     :deep(.el-form-item) {
         label {
             color: var(--ev-c-text-1);
         }
     }
 
-    /* 自动换号卡片 */
-    .auto-switch-card {
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+    /* 通用卡片 */
+    .feature-card {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
         padding: 16px 20px;
-        margin-bottom: 16px;
-        max-width: 500px;
-    }
-    .auto-switch-header {
+        margin-bottom: 12px;
+        max-width: 560px;
         display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
+        flex-direction: column;
+        gap: 12px;
     }
+
+    .feature-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .section-bar {
+        width: 4px;
+        height: 16px;
+        background: var(--el-color-primary);
+        border-radius: 2px;
+    }
+
     .card-title {
         font-size: 15px;
         font-weight: 600;
         color: #e0e0e0;
     }
-    .card-desc {
+
+    /* 注入状态行 */
+    .feature-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .feature-info {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .feature-label {
+        font-size: 13px;
+        color: #bbb;
+    }
+
+    .feature-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    /* 提示框 */
+    .tip-box {
         font-size: 12px;
         color: #999;
-        margin-top: 2px;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 6px;
+        padding: 8px 12px;
+        line-height: 1.6;
     }
-    .switch-wrap {
+
+    .tip-warning {
+        color: #e6a23c;
+        background: rgba(230, 162, 60, 0.08);
+    }
+
+    /* 开关行 */
+    .toggle-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .toggle-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #e0e0e0;
+        margin-bottom: 4px;
+    }
+
+    .toggle-desc {
+        font-size: 12px;
+        color: #888;
+        max-width: 380px;
+        line-height: 1.6;
+    }
+
+    /* 带状态标签的开关 */
+    .switch-with-label {
         display: flex;
         align-items: center;
         gap: 8px;
+        flex-shrink: 0;
     }
-    .switch-label {
+
+    .switch-status-label {
         font-size: 12px;
-        color: #999;
+        color: #888;
     }
-    .auto-switch-body {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
+
+    .switch-status-label.active {
+        color: #67c23a;
     }
+
+    /* 统计行 */
     .stat-row {
         display: flex;
-        gap: 32px;
+        gap: 24px;
+        flex-wrap: wrap;
     }
+
     .stat-item {
         display: flex;
         flex-direction: column;
         gap: 4px;
     }
+
     .stat-label {
         font-size: 12px;
         color: #999;
     }
+
     .stat-value {
-        font-size: 14px;
+        font-size: 13px;
         color: #e0e0e0;
     }
+
     .stat-value.highlight {
         color: #67c23a;
         font-weight: 500;

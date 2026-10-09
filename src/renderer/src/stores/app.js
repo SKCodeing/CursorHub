@@ -58,14 +58,50 @@ export const useAppStore = defineStore("app", {
         async fetchCursorInfo() {
             try {
                 this.cursorInfo = (await window.api.getCursorInfo()) || {};
-                console.log("this.cursorInfo =>", this.cursorInfo);
+
+                // 获取双来源账号信息
+                let activeEmail = this.cursorInfo.cachedEmail || "";
+                let activeAccessToken = this.cursorInfo.accessToken || "";
+                let activeRefreshToken = this.cursorInfo.refreshToken || "";
+
+                try {
+                    const result = await window.api.getActiveCursorEmail();
+                    // result.storage = storage.json 来源
+                    // result.live[]  = 各 token server 来源
+
+                    const storageEmail = result?.storage?.email || "";
+                    const liveList = result?.live || [];
+
+                    // 收集所有邮箱（storage + live），去重
+                    const allEmails = new Set();
+                    if (storageEmail) allEmails.add(storageEmail);
+                    liveList.forEach(l => l.email && allEmails.add(l.email));
+
+                    if (allEmails.size === 1) {
+                        // 只有一个账号，直接用
+                        const onlyEmail = [...allEmails][0];
+                        const liveMatch = liveList.find(l => l.email === onlyEmail);
+                        activeEmail = onlyEmail;
+                        activeAccessToken = liveMatch?.accessToken || result?.storage?.accessToken || activeAccessToken;
+                        activeRefreshToken = liveMatch?.refreshToken || result?.storage?.refreshToken || activeRefreshToken;
+                    } else if (allEmails.size > 1) {
+                        // 多个来源有不同账号，优先用 live（更可能是最新热推的）
+                        // 同时 storage 的账号也一起采集（会在 finally 里写入）
+                        const liveFirst = liveList[0];
+                        activeEmail = liveFirst?.email || storageEmail;
+                        activeAccessToken = liveFirst?.accessToken || result?.storage?.accessToken || activeAccessToken;
+                        activeRefreshToken = liveFirst?.refreshToken || result?.storage?.refreshToken || activeRefreshToken;
+                        console.log(`[fetchCursorInfo] 多来源: live=${liveFirst?.email} storage=${storageEmail}`);
+                    }
+                } catch {
+                    // fallback 静默
+                }
 
                 this.setCursorAccountsInfo({
-                    email: this.cursorInfo.cachedEmail,
-                    accessToken: this.cursorInfo.accessToken,
-                    refreshToken: this.cursorInfo.refreshToken,
+                    email: activeEmail,
+                    accessToken: activeAccessToken,
+                    refreshToken: activeRefreshToken,
                     cachedSignUpType: this.cursorInfo.cachedSignUpType,
-                    // workosUserId 不从这里传，由 getStripeProfile 自己从 JWT sub 解析
                 });
             } catch (error) {
                 console.error("Failed to fetch cursor info:", error);

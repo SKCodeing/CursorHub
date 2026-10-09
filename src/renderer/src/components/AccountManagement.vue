@@ -814,17 +814,35 @@
 
                 <el-table-column label="使用状态" width="90" align="center">
                     <template #default="scope">
+                        <!-- 使用中：当前激活的账号 -->
                         <el-tag
-                            v-if="scope.row.used_at"
+                            v-if="cursorAccountsInfo.email === scope.row.email"
+                            size="small"
+                            type="success"
+                        >
+                            使用中
+                        </el-tag>
+                        <!-- 已用尽：触发过 quota 耗尽 -->
+                        <el-tag
+                            v-else-if="scope.row.quota_at"
+                            size="small"
+                            type="danger"
+                        >
+                            已用尽
+                        </el-tag>
+                        <!-- 已使用：用过但未用尽 -->
+                        <el-tag
+                            v-else-if="scope.row.used_at"
                             size="small"
                             type="info"
                         >
                             已使用
                         </el-tag>
+                        <!-- 未使用 -->
                         <el-tag
                             v-else
                             size="small"
-                            type="success"
+                            type="warning"
                         >
                             未使用
                         </el-tag>

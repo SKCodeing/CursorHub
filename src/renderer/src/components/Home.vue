@@ -26,6 +26,10 @@
     let unsubscribeLog;
     const isRefreshLoading = ref(false);
     let refreshIntervalId = null;
+    // 定时采集：轮询 storage.json 检测账号变化
+    let autoCollectIntervalId = null;
+    const autoCollectEnabled = ref(false);
+    const collectedEmails = new Set();  // 已采集过的邮箱集合，避免两来源交替触发死循环
     const isInitLoading = ref(false);
     const useAccountDialogVisible = ref(false);
     const settingsDialogVisible = ref(false);
@@ -111,6 +115,7 @@
         if (refreshIntervalId) {
             clearInterval(refreshIntervalId);
         }
+        stopAutoCollect();
     });
 
     const handleLogFromMain = async (log) => {
@@ -232,7 +237,14 @@
             // ElMessage.error("刷新失败");
             // ElMessage.error("刷新订阅信息失败");
         } finally {
-            await window.api.accounts.createOrUpdateAccount(JSON.parse(JSON.stringify(cursorAccountsInfo.value)));
+            // 采集当前登录账号到数据库，刷新进来的账号都应是「未使用」状态
+            const snapshot = JSON.parse(JSON.stringify(cursorAccountsInfo.value));
+            if (snapshot.email) {
+                // 显式传 null 清除旧的 used_at / quota_at，确保刷新/采集不污染使用状态
+                snapshot.used_at = null;
+                snapshot.quota_at = null;
+                await window.api.accounts.createOrUpdateAccount(snapshot);
+            }
 
             const timeEnd = Date.now();
             setTimeout(
@@ -544,6 +556,101 @@
         logs.value = [];
     };
 
+    // ── 定时采集：每 1 秒轮询，同时检测 storage.json 和各 token server 的账号变化 ──
+    const startAutoCollect = () => {
+        if (autoCollectIntervalId) return;
+        // 把当前已知的所有账号邮箱预填入 Set，避免启动时把现有账号当作新切换
+        collectedEmails.clear();
+        if (cursorAccountsInfo.value?.email) collectedEmails.add(cursorAccountsInfo.value.email);
+        addLog({ level: "info", data: "已开启定时采集，每秒检测账号变化..." });
+
+        autoCollectIntervalId = setInterval(async () => {
+            try {
+                const result = await window.api.getActiveCursorEmail();
+                const storageEmail = result?.storage?.email || "";
+                const liveList = result?.live || [];
+
+                // 收集所有有效账号（storage + 所有 live 端口），去重
+                const candidates = [];
+                if (storageEmail) {
+                    candidates.push({
+                        email: storageEmail,
+                        accessToken: result.storage.accessToken || "",
+                        refreshToken: result.storage.refreshToken || "",
+                        source: "storage",
+                    });
+                }
+                for (const live of liveList) {
+                    if (live.email && !candidates.find(c => c.email === live.email)) {
+                        candidates.push({
+                            email: live.email,
+                            accessToken: live.accessToken || "",
+                            refreshToken: live.refreshToken || "",
+                            source: `live(port ${live.port})`,
+                        });
+                    }
+                }
+
+                // 找出还没采集过的新账号
+                const newOnes = candidates.filter(c => c.email && !collectedEmails.has(c.email));
+                if (newOnes.length === 0) return;
+
+                for (const item of newOnes) {
+                    collectedEmails.add(item.email);
+                    addLog({ level: "success", data: `检测到账号切换（${item.source}）：${item.email}，正在采集...` });
+
+                    // 更新首页显示（用第一个新账号）
+                    if (item === newOnes[0]) {
+                        appStore.setCursorAccountsInfo({
+                            email: item.email,
+                            accessToken: item.accessToken,
+                            refreshToken: item.refreshToken,
+                        });
+                    }
+
+                    // 写入数据库，清除使用状态
+                    await window.api.accounts.createOrUpdateAccount({
+                        email: item.email,
+                        accessToken: item.accessToken,
+                        refreshToken: item.refreshToken,
+                        used_at: null,
+                        quota_at: null,
+                    });
+
+                    addLog({ level: "success", data: `采集成功：${item.email}（未使用状态）` });
+                }
+
+                // 如果账号管理面板是激活状态，刷新列表
+                if (activeName.value === "second") {
+                    accountManagementRef.value?.fetchAccounts();
+                }
+            } catch (e) {
+                console.warn("[autoCollect] poll error:", e.message);
+            }
+        }, 1000);
+    };
+
+    const stopAutoCollect = () => {
+        if (autoCollectIntervalId) {
+            clearInterval(autoCollectIntervalId);
+            autoCollectIntervalId = null;
+        }
+        if (autoCollectEnabled.value) {
+            addLog({ level: "info", data: "已关闭定时采集" });
+        }
+        collectedEmails.clear();
+        autoCollectEnabled.value = false;
+    };
+
+    const toggleAutoCollect = () => {
+        if (autoCollectEnabled.value) {
+            stopAutoCollect();
+        } else {
+            autoCollectEnabled.value = true;
+            startAutoCollect();
+        }
+    };
+
     const openLink = (url) => {
         if (url) {
             window.api.openExternalLink(url);
@@ -848,6 +955,19 @@
                                     <span class="card-item-label">阻止更新</span>
                                     <el-button @click="restoreBackup">阻止更新</el-button>
                                 </p> -->
+                                <p class="card-item btn-item">
+                                    <span class="card-item-label">
+                                        定时采集
+                                        <span class="collect-desc">每秒检测账号切换，自动存入账号库（未使用状态）</span>
+                                    </span>
+                                    <el-button
+                                        :type="autoCollectEnabled ? 'danger' : 'success'"
+                                        plain
+                                        @click="toggleAutoCollect"
+                                    >
+                                        {{ autoCollectEnabled ? "停止采集" : "开始采集" }}
+                                    </el-button>
+                                </p>
                             </el-card>
                             <el-card class="log-card" style="">
                                 <div class="card-header">
@@ -1029,6 +1149,13 @@
                             &:hover {
                                 color: var(--el-color-primary);
                             }
+                        }
+                        .collect-desc {
+                            display: block;
+                            font-size: 11px;
+                            color: rgba(255, 255, 255, 0.2);
+                            margin-top: 2px;
+                            font-weight: normal;
                         }
                     }
 
