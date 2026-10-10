@@ -18,23 +18,22 @@
     const CURRENT_YEAR = new Date().getFullYear();
 
     const LINKS = {
-        github: "https://github.com/liqiang-xxfy/fly-cursor-free/releases/latest",
-        docs: "https://docs.qq.com/aio/DUGd6V2t5WUVoQUdG",
-        qqGroup: "https://qun.qq.com/universal-share/share?ac=1&authKey=ZpKpMm4QdN1I2eWzqZYinybEpN1PfyrUlmgA01ZG0mAVSUVg0fWQWngzBnl7jG79&busi_data=eyJncm91cENvZGUiOiIxMDAyMzg4NTM3IiwidG9rZW4iOiJNR0hENmlHS0xHSzdmMm0xRmZSNjJpczdJMWl5WkhrNWI0SHVQOUZhemNuSTcvN0VQNUNSZVZ4Ty9kbU1KSFBWIiwidWluIjoiMzY2Mzg1NjQyOSJ9&data=ghmRHANkTOdaEFfbxNKWtfgZ5emKN2-RQ-FKgFvWnukdfbup51jtrgQKlbPS_2O-0QHYmuRUd7her7DzYjH43A&svctype=4&tempid=h5_group_info",
-        pan123: "https://www.123865.com/s/uY80Td-AtUh",
+        quark: "https://pan.quark.cn/s/47124c66291d",
         baidu: "https://pan.baidu.com/s/1UPg4D4VO_F_47Fl1A7oc8g?pwd=9gmc",
+        qqGroup: "https://qun.qq.com/universal-share/share?ac=1&authKey=ZpKpMm4QdN1I2eWzqZYinybEpN1PfyrUlmgA01ZG0mAVSUVg0fWQWngzBnl7jG79&busi_data=eyJncm91cENvZGUiOiIxMDAyMzg4NTM3IiwidG9rZW4iOiJNR0hENmlHS0xHSzdmMm0xRmZSNjJpczdJMWl5WkhrNWI0SHVQOUZhemNuSTcvN0VQNUNSZVZ4Ty9kbU1KSFBWIiwidWluIjoiMzY2Mzg1NjQyOSJ9&data=ghmRHANkTOdaEFfbxNKWtfgZ5emKN2-RQ-FKgFvWnukdfbup51jtrgQKlbPS_2O-0QHYmuRUd7her7DzYjH43A&svctype=4&tempid=h5_group_info",
     };
 
     const appStore = useAppStore();
     const { appConfig, aboutNotice, appLicenseInfo } = storeToRefs(appStore);
 
     const previewImg = ref(null);
+    const showHelpDoc = ref(false);
 
     const versionText = computed(() => (appConfig.value?.version || "").trim());
     const signatureText = computed(() => appLicenseInfo.value?.signature || "");
     const appName = computed(() => appConfig.value?.appName || "CursorHub");
     const contactQQ = "807600577";
-    const qqGroupNo = "1002388537";
+    const qqGroupNo = "569846057";
 
     const techStack = [
         { label: "Electron" },
@@ -46,8 +45,20 @@
         if (url) window.api.openExternalLink(url);
     };
 
-    const openHelpDoc = () => {
-        window.api.openHelpDoc();
+    // 内嵌帮助文档：读取本地 HTML 内容，用 srcdoc 注入 iframe（绕过 CSP blob 限制）
+    const helpHtmlContent = ref("");
+    const openHelpDoc = async () => {
+        if (!helpHtmlContent.value) {
+            const result = await window.api.getHelpDocPath();
+            if (result?.success && result.content) {
+                helpHtmlContent.value = result.content;
+            } else {
+                // 兜底：用外部浏览器打开
+                window.api.openHelpDoc();
+                return;
+            }
+        }
+        showHelpDoc.value = true;
     };
 </script>
 
@@ -71,10 +82,6 @@
                             </p>
                             <div class="tech-chips">
                                 <span v-for="item in techStack" :key="item.label" class="tech-chip">{{ item.label }}</span>
-                            </div>
-                            <div class="intro-actions">
-                                <el-button type="primary" size="small" @click="openHelpDoc">使用帮助</el-button>
-                                <el-button size="small" @click="openLink(LINKS.github)">下载更新</el-button>
                             </div>
                         </div>
                     </div>
@@ -111,36 +118,15 @@
                                 <div class="link-desc">常见问题与配置说明</div>
                             </div>
                         </button>
-                        <button type="button" class="link-row" @click="openLink(LINKS.docs)">
-                            <div class="link-icon doc-tone"><el-icon :size="15"><Document /></el-icon></div>
+                        <!-- 在线文档 / GitHub Release 暂时隐藏 -->
+                        <button type="button" class="link-row" @click="openLink(LINKS.quark)">
+                            <div class="link-icon primary-tone"><el-icon :size="15"><Link /></el-icon></div>
                             <div class="link-text">
-                                <div class="link-label">在线文档</div>
-                                <div class="link-desc">docs.qq.com</div>
+                                <div class="link-label">夸克网盘</div>
+                                <div class="link-desc">提取码 RDfL</div>
                             </div>
                         </button>
-                        <button type="button" class="link-row" @click="openLink(LINKS.github)">
-                            <div class="link-icon gh-tone"><el-icon :size="15"><Link /></el-icon></div>
-                            <div class="link-text">
-                                <div class="link-label">GitHub Releases</div>
-                                <div class="link-desc">liqiang-xxfy/fly-cursor-free</div>
-                            </div>
-                        </button>
-                        <div class="link-grid">
-                            <button type="button" class="link-row" @click="openLink(LINKS.pan123)">
-                                <div class="link-icon primary-tone"><el-icon :size="15"><Link /></el-icon></div>
-                                <div class="link-text">
-                                    <div class="link-label">123 云盘</div>
-                                    <div class="link-desc">备用下载</div>
-                                </div>
-                            </button>
-                            <button type="button" class="link-row" @click="openLink(LINKS.baidu)">
-                                <div class="link-icon primary-tone"><el-icon :size="15"><Link /></el-icon></div>
-                                <div class="link-text">
-                                    <div class="link-label">百度网盘</div>
-                                    <div class="link-desc">提取码 9gmc</div>
-                                </div>
-                            </button>
-                        </div>
+                        <!-- 百度网盘暂时隐藏 -->
                         <button type="button" class="link-row" @click="openLink(LINKS.qqGroup)">
                             <div class="link-icon chat-tone"><el-icon :size="15"><ChatDotRound /></el-icon></div>
                             <div class="link-text">
@@ -206,6 +192,25 @@
                     <el-icon :size="16"><Close /></el-icon>
                 </button>
             </div>
+        </el-dialog>
+
+        <!-- 帮助文档内嵌弹窗 -->
+        <el-dialog
+            v-model="showHelpDoc"
+            title="使用帮助文档"
+            width="90%"
+            top="3vh"
+            class="help-doc-dialog"
+            destroy-on-close
+        >
+            <iframe
+                v-if="helpHtmlContent"
+                :srcdoc="helpHtmlContent"
+                class="help-iframe"
+                frameborder="0"
+                sandbox="allow-scripts"
+            />
+            <div v-else class="help-loading">加载中...</div>
         </el-dialog>
     </div>
 </template>
@@ -504,7 +509,28 @@
         color: var(--muted-foreground);
     }
 
-    .about-footer {
+    .help-iframe {
+        width: 100%;
+        height: 75vh;
+        border: none;
+        border-radius: 8px;
+    }
+
+    .help-loading {
+        height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted-foreground);
+        font-size: 14px;
+    }
+
+    .intro-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+    }    .about-footer {
         display: flex;
         justify-content: center;
         align-items: center;
@@ -564,5 +590,8 @@
     }
     .qr-preview-dialog .el-dialog__body {
         padding: 16px;
+    }
+    .help-doc-dialog .el-dialog__body {
+        padding: 12px 16px;
     }
 </style>

@@ -104,4 +104,4 @@ contextBridge.exposeInMainWorld("api", {
 
     // ── 帮助文档 ──────────────────────────────────────────────
     openHelpDoc: () => ipcRenderer.invoke("open-help-doc"),
-});
+    getHelpDocPath: () => ipcRenderer.invoke("get-help-doc-path"),});

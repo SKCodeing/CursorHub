@@ -4,6 +4,7 @@
  */
 import { ipcMain, shell, app } from "electron";
 import path from "path";
+import fs from "fs";
 import { getAppConfig, setAppConfig } from "../services/config.js";
 import { getCursorInfo, writeCursorAccount, getActiveCursorInfoFromTokenServers, getAllActiveFromTokenServers } from "../services/cursor.js";
 import { getSystemInfo, setRandomMachineId, setMachineGuid, checkAdminRights } from "../services/system.js";
@@ -260,4 +261,13 @@ function getJwtExp(token) {
         const helpPath = path.join(app.getAppPath(), "docs", "help.html");
         shell.openPath(helpPath);
     });
-}
+
+    ipcMain.handle("get-help-doc-path", () => {
+        const helpPath = path.join(app.getAppPath(), "docs", "help.html");
+        try {
+            const content = fs.readFileSync(helpPath, "utf8");
+            return { success: true, content };
+        } catch (e) {
+            return { success: false, message: e.message };
+        }
+    });}
