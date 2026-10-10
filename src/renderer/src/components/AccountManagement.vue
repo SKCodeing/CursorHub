@@ -786,11 +786,11 @@
                         <span style="position: relative; padding-left: 5px">
                             <el-icon
                                 v-if="cursorAccountsInfo.email === scope.row.email"
-                                color="#67c23a"
+                                color="var(--el-color-primary)"
                                 style="position: absolute; top: 3px; margin-right: 2px; margin-left: -17px"
                                 ><UserFilled
                             /></el-icon>
-                            <span :style="cursorAccountsInfo.email === scope.row.email ? 'color:#67c23a;' : ''">{{
+                            <span :style="cursorAccountsInfo.email === scope.row.email ? 'color:var(--el-color-primary);' : ''">{{
                                 scope.row.email
                             }}</span>
                         </span>
@@ -806,7 +806,7 @@
                     show-overflow-tooltip
                 >
                     <template #default="scope">
-                        <span :style="cursorAccountsInfo.email === scope.row.email ? 'color:#67c23a;' : ''">{{
+                        <span :style="cursorAccountsInfo.email === scope.row.email ? 'color:var(--el-color-primary);' : ''">{{
                             scope.row.register_time
                         }}</span>
                     </template>
@@ -992,41 +992,47 @@
 
 <style lang="scss" scoped>
     .account-management-container {
-        padding: 10px;
+        padding: 4px 4px 0;
         display: flex;
         flex-direction: column;
         height: 100%;
         box-sizing: border-box;
-        opacity: 0.9;
+        background: rgb(var(--surface-rgb) / var(--glass-opacity));
+        backdrop-filter: blur(var(--glass-blur));
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        overflow: hidden;
     }
     .footer {
         display: flex;
         justify-content: space-between;
         align-items: center;
+        padding: 8px 12px 12px;
+        gap: 8px;
+        flex-wrap: wrap;
 
         .toolbar {
-            margin-top: 10px;
             flex-shrink: 0;
             display: flex;
             align-items: center;
             flex-wrap: wrap;
+            gap: 4px;
         }
         :deep(.pagination-container) {
             display: flex;
             justify-content: flex-end;
-            margin-top: 10px;
             flex-shrink: 0;
 
             .el-pagination {
                 .el-pagination__classifier,
                 .el-pagination__goto,
                 .el-pagination__total {
-                    color: var(--ev-c-text-1);
+                    color: var(--muted-foreground);
                 }
                 .btn-prev,
                 .btn-next,
                 .el-pager li {
-                    border-radius: 4px;
+                    border-radius: 8px;
                     margin: 0 3px;
                 }
                 .el-pager li.is-active {
@@ -1043,26 +1049,26 @@
     .table-container {
         flex: 1;
         min-height: 0;
-        border-radius: 4px;
         overflow: hidden;
     }
 
-    /* 美化UI样式 */
     :deep(.el-table) {
-        // 表头
+        --el-table-bg-color: transparent;
+        --el-table-tr-bg-color: transparent;
+        --el-table-header-bg-color: rgb(var(--surface-contrast-rgb) / 0.65);
+        --el-table-row-hover-bg-color: rgb(var(--primary-rgb) / 0.08);
+        --el-table-border-color: var(--border);
+        --el-table-text-color: var(--foreground);
+        --el-table-header-text-color: var(--muted-foreground);
+        background: transparent;
+
         th.el-table__cell {
-            background-color: #f7f9fc;
-            color: #333;
             font-weight: 600;
             user-select: none;
         }
-        // hover效果
-        .el-table__body tr:hover > td.el-table__cell {
-            background-color: #ecf5ff !important;
-        }
         .el-table__body tr.active-row > td,
         .el-table__body tr.active-row:hover > td {
-            background-color: #d9ecff !important;
+            background-color: rgb(var(--primary-rgb) / 0.12) !important;
         }
     }
 

@@ -1,55 +1,69 @@
 <script setup>
     import Home from "./components/Home.vue";
     import TitleBar from "./components/TitleBar.vue";
-    import backgroundImageUrl from "./assets/image/background.jpg";
-    // const ipcHandle = () => window.electron.ipcRenderer.send('ping');
+    import AppSidebar from "./components/AppSidebar.vue";
 </script>
 
 <template>
-    <div class="app-body" :style="{ backgroundImage: `url(${backgroundImageUrl})` }">
-        <TitleBar />
-        <div class="content">
-            <Home />
+    <div class="app-shell">
+        <div class="bg-glow bg-glow-1"></div>
+        <div class="bg-glow bg-glow-2"></div>
+        <div class="workspace">
+            <AppSidebar />
+            <div class="main-column">
+                <TitleBar />
+                <main class="app-main">
+                    <Home />
+                </main>
+            </div>
         </div>
     </div>
 </template>
 
 <style lang="scss">
-    .app-body {
+    .app-shell {
         position: relative;
         height: calc(100vh - 6px);
         width: calc(100vw - 6px);
         margin: 3px;
-        // background-color: #012f49;
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
         overflow: hidden;
-        border-radius: 10px;
-        box-shadow: 1px 1px 5px 0px rgb(0 0 0 / 51%);
-
-        .content {
-            padding: 40px 20px 20px;
-            height: 100%;
-            box-sizing: border-box;
-            overflow-y: auto;
-        }
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: transparent;
+        box-shadow: 0 8px 32px rgb(0 0 0 / 18%);
+        display: flex;
+        flex-direction: column;
     }
+
+    .workspace {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex: 1;
+        min-height: 0;
+    }
+
+    .main-column {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    .app-main {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding-top: 0;
+    }
+
     .auto-register-dialog {
         .el-input {
             width: 80px;
         }
-    }
-    .el-popper.is-customized {
-        --el-card-bg-color: #f8f9fa69;
-        /* Set padding to ensure the height is 32px */
-        padding: 6px 12px;
-        background: white;
-        color: rgba(0, 0, 0, 0.664);
-    }
-
-    .el-popper.is-customized .el-popper__arrow::before {
-        background: white;
-        right: 0;
     }
 </style>

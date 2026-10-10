@@ -1,26 +1,27 @@
 <script setup>
-    import { ref, nextTick, provide, computed } from "vue";
+    import { ref, nextTick, provide, computed, watch } from "vue";
     import { onMounted, onUnmounted } from "vue";
     import { storeToRefs } from "pinia";
     import { useAppStore } from "../stores/app.js";
+    import { useUiStore, THEME_REGISTRY } from "../stores/ui.js";
     // eslint-disable-next-line no-unused-vars
     import { getUsage, getStripeProfile } from "../api/cursor_api.js";
     import AccountManagement from "./AccountManagement.vue";
+    import About from "./About.vue";
     import UseAccountConfirmationDialog from "./UseAccountConfirmationDialog.vue";
     import SettingsDialog from "./SettingsDialog.vue";
     import BackupSettingsDialog from "./BackupSettingsDialog.vue";
     import RestoreBackupDialog from "./RestoreBackupDialog.vue";
-    import { Refresh, CircleCheck, WarningFilled, Delete } from "@element-plus/icons-vue";
+    import { Refresh } from "@element-plus/icons-vue";
     import { ElMessage, ElMessageBox } from "element-plus";
     import { jwtDecode } from "jwt-decode";
     const SUBSCRIBE_FREE_NAME = "free";
     const SUBSCRIBE_PRO_NAME = "free_trial";
 
     const appStore = useAppStore();
-    const { cursorInfo, appConfig, systemInfo, cursorAccountsInfo, appLicenseInfo, aboutNotice } =
-        storeToRefs(appStore);
-
-    const activeName = ref("first");
+    const uiStore = useUiStore();
+    const { cursorInfo, appConfig, systemInfo, cursorAccountsInfo } = storeToRefs(appStore);
+    const { activeNav, theme } = storeToRefs(uiStore);
     const accountManagementRef = ref(null);
     let unsubscribeLog;
     const isRefreshLoading = ref(false);
@@ -157,14 +158,6 @@
         return info;
     });
 
-    const versionText = computed(() => {
-        // const name = appConfig.value.appName || "";
-        const ver = appConfig.value.version || "";
-        return `${ver}`.trim();
-    });
-
-    const signatureText = computed(() => appLicenseInfo.value?.signature || "");
-
     const checkAdminRights = async () => {
         isAdmin.value = await window.api.checkAdminRights();
     };
@@ -275,12 +268,36 @@
         }
     };
 
-    const handleClick = (tab, event) => {
-        console.log(tab, event);
-        if (tab.props.name === "second") {
-            accountManagementRef.value?.fetchAccounts();
-        }
-    };
+    watch(
+        activeNav,
+        async (nav) => {
+            if (nav === "accounts") {
+                await nextTick();
+                accountManagementRef.value?.fetchAccounts();
+            }
+        },
+        { immediate: true }
+    );
+
+    const emailLetter = computed(() => {
+        const email = cursorAccountsInfo.value?.email;
+        return email ? String(email).charAt(0).toUpperCase() : "?";
+    });
+
+    const usagePercent = computed(() => {
+        const total = accountInfoShow.value?.modelUsageTotal;
+        const used = accountInfoShow.value?.modelUsageUsed;
+        if (!total) return 0;
+        return Math.min(100, Math.round((used / total) * 100));
+    });
+
+    const platformLabel = computed(() => {
+        const p = systemInfo.value?.platform;
+        if (p === "win32") return "Windows";
+        if (p === "darwin") return "Mac";
+        if (p === "linux") return "Linux";
+        return p ? "未知" : "";
+    });
 
     const refresh = async () => {
         if (isRefreshLoading.value) return;
@@ -555,10 +572,6 @@
         }
     };
 
-    const openHelpDoc = () => {
-        window.api.openHelpDoc();
-    };
-
     const autoRegisterAndLogin = async () => {
         if (loadingAutoRegister.value) {
             ElMessage.error("正在执行注册程序，请稍后再试");
@@ -753,7 +766,7 @@
                 }
 
                 // 如果账号管理面板是激活状态，刷新列表
-                if (activeName.value === "second") {
+                if (activeNav.value === "accounts") {
                     accountManagementRef.value?.fetchAccounts();
                 }
             } catch (e) {
@@ -783,265 +796,283 @@
         }
     };
 
-    const openLink = (url) => {
-        if (url) {
-            window.api.openExternalLink(url);
-        }
-    };
 </script>
 
 <template>
-    <div v-loading="isInitLoading" class="body-card">
-        <el-tabs v-model="activeName" class="demo-tabs" @tab-click="handleClick">
-
-            <!-- ══ 首页 ══ -->
-            <el-tab-pane label="首页" name="first">
-                <div class="body-card-item">
-                    <div class="home-layout">
-
-                        <!-- 左列 -->
-                        <div class="home-col-left">
-                            <div class="left-col-inner">
-
-                                <!-- 当前登录账号 -->
-                                <el-card>
-                                    <div class="card-header">
-                                        <span>当前登录账号</span>
-                                    </div>
-                                    <div class="card-item">
-                                        <span class="card-item-label">登录邮箱:</span>
-                                        <span :class="{ 'is-expired': !cursorAccountsInfo.email, 'is-trial': cursorAccountsInfo.email }">
-                                            {{ cursorAccountsInfo.email || "未登录" }}
-                                        </span>
-                                    </div>
-                                    <div class="card-item">
-                                        <span class="card-item-label">订阅状态:</span>
-                                        <span :class="{ 'is-expired': accountInfoShow.membershipType === SUBSCRIBE_FREE_NAME, 'is-trial': accountInfoShow.membershipType === SUBSCRIBE_PRO_NAME }">
-                                            {{ accountInfoShow.membershipTypeShow }}
-                                        </span>
-                                    </div>
-                                    <div class="card-item">
-                                        <span class="card-item-label">模型用量:</span>
-                                        <span v-if="accountInfoShow.modelUsageTotal">
-                                            {{ accountInfoShow.modelUsageUsed }} / {{ accountInfoShow.modelUsageTotal }}
-                                        </span>
-                                        <span v-else class="is-trial">无限制</span>
-                                    </div>
-                                    <el-progress
-                                        v-if="accountInfoShow.modelUsageTotal"
-                                        class="model-usage-progress"
-                                        :percentage="(accountInfoShow.modelUsageUsed / accountInfoShow.modelUsageTotal) * 100"
-                                        :show-text="false"
-                                        :stroke-width="10"
-                                        striped
-                                        striped-flow
-                                        :duration="15"
-                                    />
-                                    <el-icon class="refresh-icon" :class="{ 'is-loading': isRefreshLoading }" :size="20" @click="refresh">
-                                        <Refresh />
-                                    </el-icon>
-                                </el-card>
-
-                                <!-- 功能 -->
-                                <el-card>
-                                    <div class="card-header">功能</div>
-                                    <el-tooltip :visible="!appConfig.path_cursor_exe ? undefined : false" content="未找到Cursor安装路径，打开Cursor后点击刷新重新查找" effect="customized" placement="right">
-                                        <div class="card-item check-item">
-                                            <span class="card-item-label">获取 Cursor 安装路径</span>
-                                            <el-icon v-if="appConfig.path_cursor_exe" class="check-icon" :size="20" style="color: #67c23a"><CircleCheck /></el-icon>
-                                            <el-icon v-else class="check-icon" :size="20" style="color: #f56c6c"><WarningFilled /></el-icon>
-                                        </div>
-                                    </el-tooltip>
-                                    <el-tooltip :visible="!appConfig.path_cursor_user_db ? undefined : false" content="未找到Cursor数据文件路径，建议安装默认路径" effect="customized" placement="right">
-                                        <div class="card-item check-item">
-                                            <span class="card-item-label">获取 Cursor 数据文件路径</span>
-                                            <el-icon v-if="appConfig.path_cursor_user_db" class="check-icon" :size="20" style="color: #67c23a"><CircleCheck /></el-icon>
-                                            <el-icon v-else class="check-icon" :size="20" style="color: #f56c6c"><WarningFilled /></el-icon>
-                                        </div>
-                                    </el-tooltip>
-                                    <div class="card-item btn-item">
-                                        <span class="card-item-label">重置机器码</span>
-                                        <el-button @click="resetMachine">重置机器码</el-button>
-                                    </div>
-                                    <div class="card-item btn-item">
-                                        <span class="card-item-label">备份Cursor设置、快捷键...</span>
-                                        <el-button @click="backup">备份设置</el-button>
-                                    </div>
-                                    <div class="card-item btn-item">
-                                        <span class="card-item-label">备份恢复</span>
-                                        <el-button @click="restoreBackup">备份恢复</el-button>
-                                    </div>
-                                    <div class="card-item btn-item">
-                                        <span class="card-item-label">账号库备份</span>
-                                        <el-button @click="backupAccountDb">备份账号库</el-button>
-                                    </div>
-                                    <div class="card-item btn-item">
-                                        <span class="card-item-label">账号库恢复</span>
-                                        <el-button @click="restoreAccountDb">恢复账号库</el-button>
-                                    </div>
-                                    <div class="card-item btn-item">
-                                        <span class="card-item-label">
-                                            定时采集
-                                            <span class="collect-desc">每秒检测账号切换，自动存入账号库（未使用状态）</span>
-                                        </span>
-                                        <el-button :type="autoCollectEnabled ? 'danger' : 'success'" plain @click="toggleAutoCollect">
-                                            {{ autoCollectEnabled ? "停止采集" : "开始采集" }}
-                                        </el-button>
-                                    </div>
-                                </el-card>
-
-                                <!-- 无感换号 -->
-                                <div class="feature-card">
-                                    <div class="feature-card-header">
-                                        <div class="header-left">
-                                            <div class="section-bar"></div>
-                                            <span class="card-title">无感换号</span>
-                                        </div>
-                                    </div>
-                                    <div class="feature-row">
-                                        <div class="feature-info">
-                                            <span class="feature-label">注入状态</span>
-                                            <el-tag :type="patchStatus.patched ? 'success' : 'info'" size="small" style="margin-left: 8px">
-                                                {{ patchStatus.patched ? "已注入" : "未注入" }}
-                                            </el-tag>
-                                        </div>
-                                        <div class="feature-actions">
-                                            <el-button v-if="!patchStatus.patched" type="primary" size="small" :loading="patchLoading" :disabled="!patchStatus.targetExists" @click="handleApplyPatch">开启无感换号</el-button>
-                                            <el-button v-else type="danger" size="small" plain :loading="patchLoading" @click="handleRestorePatch">关闭无感换号</el-button>
-                                        </div>
-                                    </div>
-                                    <div v-if="!patchStatus.targetExists" class="tip-box tip-warning">
-                                        未找到 Cursor 安装文件，请确认 Cursor 已安装到默认路径
-                                    </div>
-                                    <div v-if="patchStatus.patched" class="tip-box">开启后请保持 AI助手在后台运行，请不要完全退出，否则自动换号将无法生效。</div>
-                                    <div v-if="patchStatus.patched" class="tip-box">换号后请稍等几秒，或新开一个对话再试。若仍提示额度不足：关闭无感后重新获取账号登录。</div>
-                                    <div v-if="patchStatus.patched" class="toggle-row">
-                                        <div>
-                                            <div class="toggle-title">额度用尽时自动换号</div>
-                                            <div class="toggle-desc">默认关闭；开启后聊天出现 usage limit 或官方用量达标将自动换号（可能中断正在进行的 Agent/对话），关闭则需手动点「获取账号并登录」</div>
-                                        </div>
-                                        <el-switch :model-value="autoSwitchEnabled" @change="toggleAutoSwitch" />
-                                    </div>
-                                    <div v-if="patchStatus.patched && autoSwitchEnabled" class="stat-row">
-                                        <div class="stat-item">
-                                            <div class="stat-label">当前邮箱</div>
-                                            <div class="stat-value highlight">{{ autoSwitchStats.currentEmail || "—" }}</div>
-                                        </div>
-                                        <div class="stat-item">
-                                            <div class="stat-label">今日换号</div>
-                                            <div class="stat-value">{{ autoSwitchStats.todaySwitchCount ?? 0 }} 次</div>
-                                        </div>
-                                        <div class="stat-item">
-                                            <div class="stat-label">上次换号</div>
-                                            <div class="stat-value highlight">{{ autoSwitchStats.lastSwitchTime || "—" }}</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- 禁用 Cursor 更新 -->
-                                <div class="feature-card">
-                                    <div class="toggle-row">
-                                        <div>
-                                            <div class="toggle-title">禁用 Cursor 更新</div>
-                                            <div class="toggle-desc">写入 update.mode=none，避免升级覆盖指纹补丁</div>
-                                        </div>
-                                        <div class="switch-with-label">
-                                            <span class="switch-status-label" :class="{ active: disableUpdateEnabled }">
-                                                {{ disableUpdateEnabled ? "已开启" : "已关闭" }}
-                                            </span>
-                                            <el-switch :model-value="disableUpdateEnabled" :loading="disableUpdateLoading" active-color="#67c23a" @change="toggleDisableUpdate" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                            </div>
-                        </div>
-
-                        <!-- 右列 -->
-                        <div class="home-col-right">
-
-                            <!-- 版本信息 -->
-                            <el-card class="version-card">
-                                <div class="card-header">版本信息</div>
-                                <div class="card-item">
-                                    <span class="card-item-label">版本:</span>
-                                    <span v-if="systemInfo.platform === 'win32'">Windows</span>
-                                    <span v-else-if="systemInfo.platform === 'darwin'">Mac</span>
-                                    <span v-else-if="systemInfo.platform === 'linux'">Linux</span>
-                                    <span v-else-if="systemInfo.platform">未知</span>
-                                    <span v-else></span>
-                                    &nbsp;|&nbsp;
-                                    <span>{{ appConfig.appName }}{{ appConfig.version }}</span>
-                                    &nbsp;|&nbsp;
-                                    <span>Cursor {{ appConfig.cursorVersion }}</span>
-                                </div>
-                                <div class="card-item">
-                                    <span class="card-item-label">machineGuid:</span>
-                                    <span class="card-item-value">{{ cursorAccountsInfo.machineGuid }}</span>
-                                </div>
-                                <div class="card-item">
-                                    <span class="card-item-label">machineId:</span>
-                                    <span class="card-item-value">{{ cursorAccountsInfo.machineId }}</span>
-                                </div>
-                            </el-card>
-
-                            <!-- 日志 -->
-                            <el-card class="log-card">
-                                <div class="card-header">
-                                    <span>日志</span>
-                                    <el-icon class="refresh-icon clear-logs-icon" style="font-size: 16px; right: 25px; top: 18px" @click="clearLogs">
-                                        <Delete />
-                                    </el-icon>
-                                </div>
-                                <el-scrollbar ref="logScrollbarRef" class="log-container">
-                                    <div v-for="(log, index) in logs" :key="index" class="log-item" :class="`log-item-${log.level}`">
-                                        {{ log.message }}
-                                    </div>
-                                </el-scrollbar>
-                            </el-card>
-
-                        </div>
-                    </div>
+    <div v-loading="isInitLoading" class="page-root">
+        <!-- 首页 -->
+        <div v-show="activeNav === 'home'" class="page-view home-view">
+            <header class="page-header">
+                <div>
+                    <h1 class="page-title">首页</h1>
+                    <p class="page-sub">查看当前账号状态，管理无感换号</p>
                 </div>
-            </el-tab-pane>
+                <el-button size="small" :loading="isRefreshLoading" @click="refresh">
+                    <el-icon class="btn-icon" :class="{ spinning: isRefreshLoading }"><Refresh /></el-icon>
+                    刷新
+                </el-button>
+            </header>
 
-            <!-- ══ 账号 ══ -->
-            <el-tab-pane label="账号" name="second">
-                <div class="body-card-item">
-                    <AccountManagement ref="accountManagementRef" @show-use-account-dialog="showUseAccountDialog" />
-                </div>
-            </el-tab-pane>
-
-            <!-- ══ 关于 ══ -->
-            <el-tab-pane label="关于" name="fifth">
-                <el-scrollbar>
-                    <div class="body-card-item" style="padding-top: 20px">
-                        <div class="about-notice-container">
-                            <div
-                                v-for="(notice, index) in aboutNotice"
-                                :key="index"
-                                class="about-notice-item"
-                                :class="{ 'has-link': notice.url }"
-                                :style="{ color: notice.color || (notice.url ? 'var(--el-color-primary)' : ''), 'font-size': notice.fontSize || '' }"
-                                @click="notice.url ? openLink(notice.url) : null"
+            <div class="home-grid">
+                <div class="home-col">
+                    <div class="glass-card account-hero">
+                        <div class="card-head">
+                            <span>当前账号</span>
+                            <el-tag
+                                size="small"
+                                :type="accountInfoShow.membershipType === SUBSCRIBE_FREE_NAME ? 'danger' : accountInfoShow.membershipType === SUBSCRIBE_PRO_NAME ? 'warning' : 'success'"
                             >
-                                {{ notice.title }}: {{ notice.message }}
+                                {{ accountInfoShow.membershipTypeShow || "未知订阅" }}
+                            </el-tag>
+                        </div>
+                        <div class="hero-body">
+                            <div class="avatar">{{ emailLetter }}</div>
+                            <div class="hero-meta">
+                                <div class="hero-email" :class="{ muted: !cursorAccountsInfo.email }">
+                                    {{ cursorAccountsInfo.email || "未登录" }}
+                                </div>
+                                <div class="usage-line">
+                                    <span class="muted">模型用量</span>
+                                    <span v-if="accountInfoShow.modelUsageTotal">
+                                        {{ accountInfoShow.modelUsageUsed }} / {{ accountInfoShow.modelUsageTotal }}
+                                    </span>
+                                    <span v-else class="ok">无限制</span>
+                                </div>
+                                <el-progress
+                                    v-if="accountInfoShow.modelUsageTotal"
+                                    class="usage-bar"
+                                    :percentage="usagePercent"
+                                    :show-text="false"
+                                    :stroke-width="8"
+                                />
                             </div>
                         </div>
-                        <!-- 帮助文档按钮 -->
-                        <div class="about-actions">
-                            <el-button type="primary" plain @click="openHelpDoc">📖 使用帮助文档</el-button>
+                    </div>
+
+                    <div class="stat-grid">
+                        <div class="glass-card stat-card">
+                            <div class="stat-label">注入状态</div>
+                            <div class="stat-value" :class="patchStatus.patched ? 'ok' : ''">
+                                {{ patchStatus.patched ? "已注入" : "未注入" }}
+                            </div>
                         </div>
-                        <div class="license-display">
-                            <div>CursorHub {{ versionText }}</div>
-                            <div>联系QQ：807600577</div>
-                            <div v-if="signatureText">{{ signatureText }}</div>
+                        <div class="glass-card stat-card">
+                            <div class="stat-label">今日换号</div>
+                            <div class="stat-value">{{ autoSwitchStats.todaySwitchCount ?? 0 }}</div>
+                        </div>
+                        <div class="glass-card stat-card">
+                            <div class="stat-label">Cursor</div>
+                            <div class="stat-value small">{{ appConfig.cursorVersion || "—" }}</div>
                         </div>
                     </div>
-                </el-scrollbar>
-            </el-tab-pane>
 
-        </el-tabs>
+                    <div class="glass-card feature-card">
+                        <div class="card-head">
+                            <span>无感换号</span>
+                            <el-tag :type="patchStatus.patched ? 'success' : 'info'" size="small">
+                                {{ patchStatus.patched ? "运行中" : "未开启" }}
+                            </el-tag>
+                        </div>
+                        <div class="feature-row">
+                            <div class="feature-copy">
+                                <div class="toggle-title">热切换注入</div>
+                                <div class="toggle-desc">开启后换号无需重启 Cursor；请保持本应用在后台运行</div>
+                            </div>
+                            <div>
+                                <el-button v-if="!patchStatus.patched" type="primary" size="small" :loading="patchLoading" :disabled="!patchStatus.targetExists" @click="handleApplyPatch">开启</el-button>
+                                <el-button v-else type="danger" size="small" plain :loading="patchLoading" @click="handleRestorePatch">关闭</el-button>
+                            </div>
+                        </div>
+                        <div v-if="!patchStatus.targetExists" class="tip-box tip-warning">未找到 Cursor，请确认已安装到默认路径</div>
+                        <div v-if="patchStatus.patched" class="tip-box">换号后稍等几秒或新开对话；若仍提示额度不足，可关闭后重新登录。</div>
+                        <div v-if="patchStatus.patched" class="toggle-row">
+                            <div>
+                                <div class="toggle-title">额度用尽自动换号</div>
+                                <div class="toggle-desc">可能中断正在进行的对话；关闭后需手动切换账号</div>
+                            </div>
+                            <el-switch :model-value="autoSwitchEnabled" @change="toggleAutoSwitch" />
+                        </div>
+                        <div v-if="patchStatus.patched && autoSwitchEnabled" class="stat-row">
+                            <div class="mini-stat">
+                                <div class="muted">当前邮箱</div>
+                                <div class="mini-val">{{ autoSwitchStats.currentEmail || "—" }}</div>
+                            </div>
+                            <div class="mini-stat">
+                                <div class="muted">今日换号</div>
+                                <div class="mini-val">{{ autoSwitchStats.todaySwitchCount ?? 0 }} 次</div>
+                            </div>
+                            <div class="mini-stat">
+                                <div class="muted">上次换号</div>
+                                <div class="mini-val">{{ autoSwitchStats.lastSwitchTime || "—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="home-col home-col-right">
+                    <div class="glass-card version-card">
+                        <div class="card-head">环境信息</div>
+                        <div class="kv"><span class="muted">系统</span><span>{{ platformLabel }} · {{ appConfig.appName }} {{ appConfig.version }}</span></div>
+                        <div class="kv"><span class="muted">Cursor</span><span>{{ appConfig.cursorVersion || "—" }}</span></div>
+                        <div class="kv"><span class="muted">machineGuid</span><span class="mono" :title="cursorAccountsInfo.machineGuid">{{ cursorAccountsInfo.machineGuid || "—" }}</span></div>
+                        <div class="kv"><span class="muted">machineId</span><span class="mono" :title="cursorAccountsInfo.machineId">{{ cursorAccountsInfo.machineId || "—" }}</span></div>
+                    </div>
+                    <div class="glass-card log-card">
+                        <div class="card-head">
+                            <span>运行日志</span>
+                            <el-button link type="primary" size="small" @click="clearLogs">清空</el-button>
+                        </div>
+                        <el-scrollbar ref="logScrollbarRef" class="log-container">
+                            <div v-for="(log, index) in logs" :key="index" class="log-item" :class="`log-item-${log.level}`">
+                                {{ log.message }}
+                            </div>
+                            <div v-if="!logs.length" class="muted empty-log">暂无日志</div>
+                        </el-scrollbar>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 账号 -->
+        <div v-show="activeNav === 'accounts'" class="page-view accounts-view">
+            <header class="page-header">
+                <div>
+                    <h1 class="page-title">账号</h1>
+                    <p class="page-sub">管理本地账号库，切换与批量更新</p>
+                </div>
+            </header>
+            <div class="accounts-body">
+                <AccountManagement ref="accountManagementRef" @show-use-account-dialog="showUseAccountDialog" />
+            </div>
+        </div>
+
+        <!-- 设置 -->
+        <div v-show="activeNav === 'settings'" class="page-view settings-view">
+            <el-scrollbar>
+                <div class="settings-inner">
+                    <header class="page-header">
+                        <h1 class="page-title">设置</h1>
+                        <p class="page-sub">外观、环境与常用工具</p>
+                    </header>
+
+                    <section class="glass-card section-card">
+                        <div class="card-head">外观</div>
+                        <p class="section-desc">选择主题；也可点侧栏底部图标快速轮换。</p>
+                        <div class="theme-grid">
+                            <button
+                                v-for="item in THEME_REGISTRY"
+                                :key="item.key"
+                                type="button"
+                                class="theme-tile"
+                                :class="{ active: theme === item.key }"
+                                @click="uiStore.setTheme(item.key)"
+                            >
+                                <div class="theme-preview" :style="{ background: item.preview }"></div>
+                                <div class="theme-name">
+                                    <span>{{ item.name }}</span>
+                                    <span v-if="theme === item.key" class="theme-check">✓</span>
+                                </div>
+                            </button>
+                        </div>
+                    </section>
+
+                    <section class="glass-card section-card">
+                        <div class="card-head">环境</div>
+                        <el-tooltip :visible="!appConfig.path_cursor_exe ? undefined : false" content="未找到 Cursor 安装路径，打开 Cursor 后点首页刷新再试" placement="right">
+                            <div class="check-row">
+                                <div>
+                                    <div class="row-title">Cursor 安装路径</div>
+                                    <div class="toggle-desc">用于注入与版本检测</div>
+                                </div>
+                                <el-tag size="small" :type="appConfig.path_cursor_exe ? 'success' : 'danger'" effect="plain">
+                                    {{ appConfig.path_cursor_exe ? "已就绪" : "未找到" }}
+                                </el-tag>
+                            </div>
+                        </el-tooltip>
+                        <el-tooltip :visible="!appConfig.path_cursor_user_db ? undefined : false" content="未找到 Cursor 数据路径，建议使用默认安装位置" placement="right">
+                            <div class="check-row">
+                                <div>
+                                    <div class="row-title">Cursor 数据路径</div>
+                                    <div class="toggle-desc">用于读写登录状态</div>
+                                </div>
+                                <el-tag size="small" :type="appConfig.path_cursor_user_db ? 'success' : 'danger'" effect="plain">
+                                    {{ appConfig.path_cursor_user_db ? "已就绪" : "未找到" }}
+                                </el-tag>
+                            </div>
+                        </el-tooltip>
+                        <div class="check-row">
+                            <div>
+                                <div class="row-title">禁用 Cursor 更新</div>
+                                <div class="toggle-desc">避免升级覆盖本地补丁</div>
+                            </div>
+                            <el-switch :model-value="disableUpdateEnabled" :loading="disableUpdateLoading" @change="toggleDisableUpdate" />
+                        </div>
+                    </section>
+
+                    <section class="glass-card section-card">
+                        <div class="card-head">备份与维护</div>
+                        <div class="tool-row">
+                            <div>
+                                <div class="row-title">备份 Cursor 设置</div>
+                                <div class="toggle-desc">设置、快捷键等</div>
+                            </div>
+                            <el-button size="small" @click="backup">备份</el-button>
+                        </div>
+                        <div class="tool-row">
+                            <div>
+                                <div class="row-title">恢复 Cursor 设置</div>
+                                <div class="toggle-desc">从本地备份还原</div>
+                            </div>
+                            <el-button size="small" @click="restoreBackup">恢复</el-button>
+                        </div>
+                        <div class="tool-row">
+                            <div>
+                                <div class="row-title">账号库备份</div>
+                                <div class="toggle-desc">导出本地账号数据库</div>
+                            </div>
+                            <el-button size="small" @click="backupAccountDb">备份</el-button>
+                        </div>
+                        <div class="tool-row">
+                            <div>
+                                <div class="row-title">账号库恢复</div>
+                                <div class="toggle-desc">将覆盖当前账号数据</div>
+                            </div>
+                            <el-button size="small" type="danger" plain @click="restoreAccountDb">恢复</el-button>
+                        </div>
+                        <div class="tool-row">
+                            <div>
+                                <div class="row-title">重置机器码</div>
+                                <div class="toggle-desc">需管理员权限，可能影响其他软件</div>
+                            </div>
+                            <el-button size="small" type="warning" plain @click="resetMachine">重置</el-button>
+                        </div>
+                        <div class="tool-row">
+                            <div>
+                                <div class="row-title">定时采集</div>
+                                <div class="toggle-desc">检测账号切换并写入账号库（未使用）</div>
+                            </div>
+                            <el-button :type="autoCollectEnabled ? 'danger' : 'primary'" plain size="small" @click="toggleAutoCollect">
+                                {{ autoCollectEnabled ? "停止" : "开始" }}
+                            </el-button>
+                        </div>
+                    </section>
+                </div>
+            </el-scrollbar>
+        </div>
+
+        <!-- 关于 -->
+        <div v-show="activeNav === 'about'" class="page-view about-view">
+            <header class="page-header">
+                <div>
+                    <h1 class="page-title">关于</h1>
+                    <p class="page-sub">版本信息、文档与支持</p>
+                </div>
+            </header>
+            <div class="about-body">
+                <About />
+            </div>
+        </div>
+
         <UseAccountConfirmationDialog v-model="useAccountDialogVisible" :account="accountToUse" @confirm="handleConfirmUseAccount" />
         <SettingsDialog v-model="settingsDialogVisible" />
         <BackupSettingsDialog v-model="backupSettingsDialogVisible" />
@@ -1050,319 +1081,217 @@
 </template>
 
 <style lang="scss" scoped>
-    // .body-card {
-    //     font-size: 20px;
-    // }
-    // .el-tabs__item.is-active {
-    //     // background-color: #262c321c;
-    // }
-
-    :deep(.el-tabs__item) {
-        color: var(--ev-c-text-1);
-        user-select: none;
-    }
-    :deep(.el-tabs__nav-wrap::after) {
-        background-color: #f8f9fa26;
-    }
-    .body-card-item {
-        position: relative;
-        height: calc(100vh - 120px);
-        padding: 10px;
-        background-color: #f8f9fa26;
-        box-shadow: 0 5px 25px rgba(0, 0, 0, 0.05);
-        border-radius: 10px;
-        box-sizing: border-box;
-
-        /* ── 两列主布局 ── */
-        .home-layout {
-            display: flex;
-            flex-direction: row;
-            align-items: flex-start;
-            gap: 10px;
-            height: 100%;
-        }
-
-        /* 左列：高度自适应内容，内容超出时滚动 */
-        .home-col-left {
-            flex: 1;
-            min-width: 0;
-            height: fit-content;
-            overflow-x: hidden;
-
-            .left-col-inner {
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                padding-right: 4px;
-            }
-        }
-
-        /* 右列：撑满剩余高度，flex 竖排，日志撑满剩余高度 */
-        .home-col-right {
-            flex: 1;
-            min-width: 0;
-            align-self: stretch;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        /* 版本卡片高度自适应 */
-        .version-card {
-            flex-shrink: 0;
-        }
-
-        /* 日志卡片撑满剩余高度 */
-        .log-card {
-            flex: 1;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-
-            :deep(.el-card__body) {
-                flex: 1;
-                min-height: 0;
-                display: flex;
-                flex-direction: column;
-                padding-top: 10px;
-            }
-        }
-
-        /* el-card 通用样式 */
-        .el-card {
-            --el-card-bg-color: #f8f9fa0a;
-            --el-card-border-color: #f8f9fa00;
-            --el-card-border-radius: 10px;
-            color: var(--ev-c-text-1);
-            position: relative;
-
-            :deep(.el-card__body) {
-                padding-top: 10px;
-            }
-        }
-
-        .card-header {
-            font-size: 16px;
-            font-weight: 800;
-            color: var(--el-color-primary);
-            user-select: none;
-            margin-bottom: 3px;
-
-            .clear-logs-icon {
-                cursor: pointer;
-                position: absolute;
-                right: 20px;
-                top: 20px;
-                color: var(--ev-c-text-2);
-                &:hover {
-                    color: var(--el-color-primary);
-                }
-            }
-        }
-
-        .card-item {
-            display: flex;
-            font-size: 14px;
-            margin-top: 10px;
-            word-break: break-all;
-
-            &.check-item {
-                align-items: center;
-                justify-content: space-between;
-                margin-top: 0px;
-            }
-            &.btn-item {
-                align-items: center;
-                justify-content: space-between;
-                .el-button {
-                    color: var(--ev-c-text-1);
-                    --el-button-bg-color: #ffffff15;
-                    --el-button-border-color: #ffffff15;
-                    &:hover {
-                        color: var(--el-color-primary);
-                    }
-                }
-                .collect-desc {
-                    display: block;
-                    font-size: 11px;
-                    color: rgba(255, 255, 255, 0.2);
-                    margin-top: 2px;
-                    font-weight: normal;
-                }
-            }
-
-            .card-item-label {
-                flex-grow: 1;
-                flex-shrink: 0;
-                color: rgba(255, 255, 255, 0.308);
-                display: inline-block;
-                margin-right: 10px;
-                user-select: none;
-            }
-            .card-item-value {
-                display: inline-block;
-                max-width: 38ch;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                direction: rtl;
-                text-align: left;
-                vertical-align: bottom;
-            }
-            .is-trial {
-                color: #67c23a;
-            }
-            .is-expired {
-                color: #f56c6c;
-            }
-        }
-
-        .refresh-icon {
-            cursor: pointer;
-            position: absolute;
-            right: 20px;
-            top: 20px;
-            &:hover {
-                color: var(--el-color-primary);
-            }
-        }
-
-        .model-usage-progress {
-            margin-top: 10px;
-            .el-progress-bar__outer {
-                background-color: #f8f9fa1f;
-            }
-        }
-
-        .log-container {
-            flex: 1;
-            min-height: 0;
-            margin-top: 10px;
-            background-color: #0000001a;
-            border-radius: 5px;
-            font-size: 12px;
-
-            :deep(.el-scrollbar) {
-                height: 100%;
-            }
-            :deep(.el-scrollbar__wrap) {
-                height: 100%;
-            }
-            :deep(.el-scrollbar__view) {
-                padding: 10px;
-            }
-            .log-item {
-                margin: 0;
-                padding: 2px 0;
-                color: var(--ev-c-text-2);
-                word-break: break-all;
-                white-space: pre-wrap;
-            }
-            .log-item-error   { color: #f56c6c; }
-            .log-item-account { color: #67c23a; }
-            .log-item-success { color: #67c23a; }
-            .log-item-warning { color: #e6a23c; }
-        }
-    }
-    .license-display {
-        position: absolute;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: 12px;
-        opacity: 0.5;
-        color: var(--ev-c-text-1);
-        white-space: pre-wrap;
-        text-align: center;
-    }
-
-    /* about notice */
-    .about-notice-item {
-        margin-bottom: 10px;
-        text-align: center;
-
-        &.has-link {
-            cursor: pointer;
-            text-decoration: underline;
-        }
-    }
-
-    .about-actions {
-        display: flex;
-        justify-content: center;
-        margin: 20px 0 10px;
-    }
-
-    /* ── feature card 样式（左列内使用） ── */
-    .feature-card {
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 16px 20px;
+    .page-root {
+        height: 100%;
+        min-height: 0;
         display: flex;
         flex-direction: column;
+        color: var(--foreground);
+    }
+
+    .page-view {
+        height: 100%;
+        min-height: 0;
+        padding: 4px 20px 16px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .page-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+        flex-shrink: 0;
+    }
+
+    .page-title {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.25;
+        color: var(--foreground);
+    }
+
+    .page-sub {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: var(--muted-foreground);
+        line-height: 1.4;
+    }
+
+    .btn-icon {
+        margin-right: 4px;
+        vertical-align: middle;
+        &.spinning { animation: spin 0.9s linear infinite; }
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .home-view {
+        overflow: hidden;
+    }
+
+    .home-grid {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
         gap: 12px;
     }
 
-    .feature-card-header {
+    .home-col {
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow: auto;
+    }
+
+    .home-col-right {
+        min-height: 0;
+    }
+
+    .accounts-view {
+        padding-bottom: 12px;
+    }
+
+    .accounts-body,
+    .about-body {
+        flex: 1;
+        min-height: 0;
+    }
+
+    .about-view {
+        overflow: hidden;
+    }
+
+    .card-head {
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 650;
+        margin-bottom: 12px;
+        color: var(--foreground);
     }
 
-    .header-left {
+    .account-hero,
+    .feature-card,
+    .version-card,
+    .log-card,
+    .section-card {
+        padding: 16px 18px;
+    }
+
+    .hero-body {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+    }
+
+    .avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        flex-shrink: 0;
         display: flex;
         align-items: center;
-        gap: 8px;
+        justify-content: center;
+        color: #fff;
+        font-weight: 700;
+        font-size: 18px;
+        background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 55%, #111827));
+        box-shadow: 0 8px 18px rgb(var(--primary-rgb) / 0.25);
     }
 
-    .section-bar {
-        width: 4px;
-        height: 16px;
-        background: var(--el-color-primary);
-        border-radius: 2px;
+    .hero-meta {
+        flex: 1;
+        min-width: 0;
     }
 
-    .card-title {
+    .hero-email {
         font-size: 15px;
         font-weight: 600;
-        color: #e0e0e0;
+        word-break: break-all;
+        line-height: 1.35;
+    }
+
+    .usage-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        margin-top: 10px;
+    }
+
+    .usage-bar {
+        margin-top: 8px;
+    }
+
+    .muted { color: var(--muted-foreground); }
+    .ok { color: var(--success) !important; }
+    .bad { color: var(--destructive); }
+
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+
+    .stat-card {
+        padding: 12px 14px;
+    }
+
+    .stat-label {
+        font-size: 12px;
+        color: var(--muted-foreground);
+    }
+
+    .stat-value {
+        font-size: 17px;
+        font-weight: 700;
+        margin-top: 4px;
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+
+        &.small {
+            font-size: 14px;
+            font-weight: 600;
+        }
     }
 
     .feature-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 12px;
     }
 
-    .feature-info {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-
-    .feature-label {
-        font-size: 13px;
-        color: #bbb;
-    }
-
-    .feature-actions {
-        display: flex;
-        gap: 8px;
+    .feature-copy {
+        min-width: 0;
     }
 
     .tip-box {
         font-size: 12px;
-        color: #999;
-        background: rgba(255, 255, 255, 0.04);
-        border-radius: 6px;
+        color: var(--muted-foreground);
+        background: rgb(var(--primary-rgb) / 0.06);
+        border-radius: 8px;
         padding: 8px 12px;
-        line-height: 1.6;
+        line-height: 1.55;
+        margin-top: 10px;
     }
 
     .tip-warning {
-        color: #e6a23c;
-        background: rgba(230, 162, 60, 0.08);
+        color: var(--warning);
+        background: rgb(245 158 11 / 0.1);
     }
 
     .toggle-row {
@@ -1370,62 +1299,182 @@
         align-items: flex-start;
         justify-content: space-between;
         gap: 12px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
     }
 
-    .toggle-title {
-        font-size: 14px;
+    .toggle-title,
+    .row-title {
+        font-size: 13px;
         font-weight: 600;
-        color: #e0e0e0;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
+        color: var(--foreground);
     }
 
     .toggle-desc {
         font-size: 12px;
-        color: #888;
-        max-width: 380px;
-        line-height: 1.6;
-    }
-
-    .switch-with-label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-shrink: 0;
-    }
-
-    .switch-status-label {
-        font-size: 12px;
-        color: #888;
-    }
-
-    .switch-status-label.active {
-        color: #67c23a;
+        color: var(--muted-foreground);
+        line-height: 1.5;
+        max-width: 420px;
     }
 
     .stat-row {
         display: flex;
-        gap: 24px;
+        gap: 20px;
         flex-wrap: wrap;
+        margin-top: 12px;
     }
 
-    .stat-item {
+    .mini-val {
+        font-size: 13px;
+        font-weight: 600;
+        margin-top: 2px;
+        word-break: break-all;
+    }
+
+    .kv {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 13px;
+        margin-top: 8px;
+        align-items: center;
+    }
+
+    .mono {
+        max-width: 42ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        direction: rtl;
+        text-align: left;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: var(--muted-foreground);
+    }
+
+    .log-card {
+        flex: 1;
+        min-height: 160px;
         display: flex;
         flex-direction: column;
-        gap: 4px;
     }
 
-    .stat-label {
+    .log-container {
+        flex: 1;
+        min-height: 0;
+        background: rgb(var(--surface-contrast-rgb) / 0.55);
+        border-radius: 10px;
+        border: 1px solid var(--border);
+    }
+
+    :deep(.log-container .el-scrollbar__view) {
+        padding: 10px 12px;
+    }
+
+    .log-item {
         font-size: 12px;
-        color: #999;
+        color: var(--muted-foreground);
+        padding: 2px 0;
+        word-break: break-all;
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
 
-    .stat-value {
+    .log-item-error { color: var(--destructive); }
+    .log-item-account,
+    .log-item-success { color: var(--success); }
+    .log-item-warning { color: var(--warning); }
+
+    .empty-log {
+        padding: 24px 8px;
+        text-align: center;
+    }
+
+    .settings-inner {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-width: 720px;
+        padding-bottom: 24px;
+    }
+
+    .settings-inner .page-header {
+        margin-bottom: 4px;
+    }
+
+    .section-desc {
+        font-size: 12px;
+        color: var(--muted-foreground);
+        margin: -4px 0 12px;
+        line-height: 1.5;
+    }
+
+    .theme-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+        gap: 10px;
+    }
+
+    .theme-tile {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: rgb(var(--surface-rgb) / 0.55);
+        cursor: pointer;
+        padding: 0;
+        text-align: left;
+        color: var(--foreground);
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+        &:hover {
+            border-color: rgb(var(--primary-rgb) / 0.45);
+        }
+
+        &.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px rgb(var(--primary-rgb) / 0.35);
+        }
+    }
+
+    .theme-preview {
+        height: 36px;
+    }
+
+    .theme-name {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 8px 10px;
+    }
+
+    .theme-check {
+        color: var(--primary);
+        font-size: 12px;
+    }
+
+    .check-row,
+    .tool-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 0;
         font-size: 13px;
-        color: #e0e0e0;
+        border-bottom: 1px solid var(--border);
+
+        &:last-child {
+            border-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        &:first-of-type {
+            padding-top: 0;
+        }
     }
 
-    .stat-value.highlight {
-        color: #67c23a;
-        font-weight: 500;
-    }
 </style>
