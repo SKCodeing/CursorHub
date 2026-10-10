@@ -3,7 +3,7 @@
         <div class="title-bar-container">
             <div class="title-bar-left">
                 <img src="../assets/image/icon.png" alt="logo" class="logo" />
-                <span class="title">Fly Cursor</span>
+                <span class="title">CursorHub</span>
             </div>
             <div class="title-bar-right">
                 <div v-if="platform !== 'darwin'" class="window-controls">

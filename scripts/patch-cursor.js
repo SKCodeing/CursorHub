@@ -54,7 +54,7 @@ const INJECT_CODE = `${INJECT_MARKER}
         var refreshTok=String(data.refreshToken||newTok).trim();
         _self.storeAccessRefreshToken(newTok,refreshTok);
         if(data.email){try{_self.storageService.store("cursorAuth/cachedEmail",data.email,-1,1);}catch(e){}}
-        console.log("[FlyCursor] hot-switched to",data.email||newTok.slice(0,20));
+        console.log("[CursorHub] hot-switched to",data.email||newTok.slice(0,20));
         try{fetch(_url("/api/ack-switch"),{method:"POST"}).catch(function(){});}catch(e){}
       }catch(e){
         if(e&&e.name==="TypeError")_needResolve=true;
@@ -62,7 +62,7 @@ const INJECT_CODE = `${INJECT_MARKER}
     }
     setInterval(_tick,1500);
     _tick();
-  }catch(e){console.warn("[FlyCursor] patch error",e);}
+  }catch(e){console.warn("[CursorHub] patch error",e);}
 }).call(this);`;
 
 // ── 注入点：storeEmailAndSignUpType 方法定义前 ────────────────────────────────

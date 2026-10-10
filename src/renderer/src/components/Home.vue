@@ -7,7 +7,6 @@
     import { getUsage, getStripeProfile } from "../api/cursor_api.js";
     import AccountManagement from "./AccountManagement.vue";
     import UseAccountConfirmationDialog from "./UseAccountConfirmationDialog.vue";
-    import Settings from "./Settings.vue";
     import SettingsDialog from "./SettingsDialog.vue";
     import BackupSettingsDialog from "./BackupSettingsDialog.vue";
     import RestoreBackupDialog from "./RestoreBackupDialog.vue";
@@ -38,7 +37,89 @@
     const accountToUse = ref(null);
     const isAdmin = ref(false);
     const loopCount = ref(1);
-    const settingsRef = ref(null);
+    const settingsFormRef = ref(null);
+    const settingsRules = ref({
+        EMAIL_DOMAIN: [{ required: true, message: "请输入域名", trigger: "blur" }],
+        RECEIVING_EMAIL: [
+            { required: true, message: "请输入tempmail邮箱", trigger: "blur" },
+            { type: "email", message: "请输入正确的邮箱格式", trigger: ["blur", "change"] },
+        ],
+        RECEIVING_EMAIL_PIN: [{ required: true, message: "请输入PIN码", trigger: "blur" }],
+    });
+    const localConfig = ref({
+        EMAIL_DOMAIN: "",
+        RECEIVING_EMAIL: "",
+        RECEIVING_EMAIL_PIN: "",
+    });
+    const autoSwitchEnabled = ref(false);
+    const autoSwitchStats = ref({ currentEmail: "", todaySwitchCount: 0, lastSwitchTime: "" });
+    let unsubAutoSwitch = null;
+    const patchStatus = ref({ patched: false, targetExists: false, backupExists: false });
+    const patchLoading = ref(false);
+    const disableUpdateEnabled = ref(false);
+    const disableUpdateLoading = ref(false);
+
+    const loadAutoSwitchStats = async () => {
+        const stats = await window.api.getAutoSwitchStats();
+        autoSwitchEnabled.value = stats.enabled;
+        autoSwitchStats.value = stats;
+    };
+    const toggleAutoSwitch = async (val) => {
+        await window.api.setAutoSwitch(val);
+        autoSwitchEnabled.value = val;
+        ElMessage.success(val ? "自动换号已开启" : "自动换号已关闭");
+    };
+    const loadPatchStatus = async () => {
+        const status = await window.api.getPatchStatus();
+        patchStatus.value = status;
+    };
+    const handleApplyPatch = async () => {
+        patchLoading.value = true;
+        try {
+            const result = await window.api.applyPatch();
+            if (result.success) { ElMessage.success(result.message); } else { ElMessage.error(result.message); }
+            await loadPatchStatus();
+        } finally { patchLoading.value = false; }
+    };
+    const handleRestorePatch = async () => {
+        patchLoading.value = true;
+        try {
+            const result = await window.api.restorePatch();
+            if (result.success) { ElMessage.success(result.message); } else { ElMessage.error(result.message); }
+            await loadPatchStatus();
+        } finally { patchLoading.value = false; }
+    };
+    const loadDisableUpdateStatus = async () => {
+        const result = await window.api.getDisableUpdateStatus();
+        disableUpdateEnabled.value = result.disabled;
+    };
+    const toggleDisableUpdate = async (val) => {
+        disableUpdateLoading.value = true;
+        try {
+            const result = await window.api.setDisableUpdate(val);
+            if (result.success) {
+                disableUpdateEnabled.value = val;
+                ElMessage.success(val ? "已禁用 Cursor 自动更新" : "已恢复 Cursor 自动更新");
+            } else { ElMessage.error(result.message || "操作失败"); }
+        } finally { disableUpdateLoading.value = false; }
+    };
+    const updateSettingsConfig = () => {
+        if (appConfig.value) {
+            localConfig.value = JSON.parse(JSON.stringify(appConfig.value));
+            settingsFormRef.value?.clearValidate();
+        }
+    };
+    const saveConfig = async () => {
+        if (!settingsFormRef.value) return;
+        try { await settingsFormRef.value.validate(); } catch { return; }
+        const newConfig = JSON.parse(JSON.stringify(localConfig.value));
+        try {
+            let setResult = await window.api.setAppConfig(newConfig);
+            if (setResult.success) { ElMessage.success("修改配置成功"); await appStore.fetchAppConfig(); }
+            else { ElMessage.error("修改配置失败"); }
+        } catch { ElMessage.error("修改配置失败"); }
+    };
+    // ──────────────────────────────────────────────────────────────────────────
     const logs = ref([]);
     const logScrollbarRef = ref(null);
 
@@ -104,6 +185,20 @@
         } finally {
             isInitLoading.value = false;
         }
+        updateSettingsConfig();
+        loadAutoSwitchStats();
+        loadPatchStatus();
+        loadDisableUpdateStatus();
+        unsubAutoSwitch = window.api.onAutoSwitchEvent(({ channel, data }) => {
+            if (channel === "auto-switched") {
+                autoSwitchStats.value.currentEmail = data.email;
+                autoSwitchStats.value.todaySwitchCount = data.todaySwitchCount;
+                autoSwitchStats.value.lastSwitchTime = data.lastSwitchTime;
+                ElMessage.success(`已自动切换到: ${data.email}`);
+            } else if (channel === "auto-switch-failed") {
+                ElMessage.warning("自动换号失败：账号池已耗尽");
+            }
+        });
         await refresh();
     });
 
@@ -116,6 +211,7 @@
             clearInterval(refreshIntervalId);
         }
         stopAutoCollect();
+        unsubAutoSwitch?.();
     });
 
     const handleLogFromMain = async (log) => {
@@ -183,9 +279,6 @@
         console.log(tab, event);
         if (tab.props.name === "second") {
             accountManagementRef.value?.fetchAccounts();
-        }
-        if (tab.props.name === "fourth") {
-            settingsRef.value?.updateConfig();
         }
     };
 
@@ -427,6 +520,45 @@
         restoreBackupDialogVisible.value = true;
     };
 
+    const backupAccountDb = async () => {
+        try {
+            const result = await window.api.accounts.backupDatabase();
+            if (result.canceled) return;
+            if (result.success) {
+                ElMessage.success("账号库备份成功");
+                addLog({ level: "success", data: `账号库已备份到: ${result.filePath}` });
+            } else {
+                ElMessage.error(result.message || "备份失败");
+            }
+        } catch (e) {
+            ElMessage.error("备份失败: " + e.message);
+        }
+    };
+
+    const restoreAccountDb = async () => {
+        try {
+            await ElMessageBox.confirm(
+                "恢复将覆盖当前所有账号数据，确定继续吗？",
+                "恢复账号库",
+                { confirmButtonText: "确定", cancelButtonText: "取消", type: "warning" }
+            );
+            const result = await window.api.accounts.restoreDatabase();
+            if (result.canceled) return;
+            if (result.success) {
+                ElMessage.success("账号库恢复成功，请切换到「账号」页查看");
+                addLog({ level: "success", data: "账号库已从备份文件恢复" });
+            } else {
+                ElMessage.error(result.message || "恢复失败");
+            }
+        } catch (e) {
+            if (e !== "cancel") ElMessage.error("恢复失败: " + e.message);
+        }
+    };
+
+    const openHelpDoc = () => {
+        window.api.openHelpDoc();
+    };
+
     const autoRegisterAndLogin = async () => {
         if (loadingAutoRegister.value) {
             ElMessage.error("正在执行注册程序，请稍后再试");
@@ -661,87 +793,178 @@
 <template>
     <div v-loading="isInitLoading" class="body-card">
         <el-tabs v-model="activeName" class="demo-tabs" @tab-click="handleClick">
+
+            <!-- ══ 首页 ══ -->
             <el-tab-pane label="首页" name="first">
                 <div class="body-card-item">
-                    <el-scrollbar>
-                        <div class="card-container">
-                            <el-card style="">
-                                <div class="card-header">
-                                    <span>当前登录账号</span>
-                                </div>
-                                <p class="card-item">
-                                    <span class="card-item-label">登录邮箱:</span>
-                                    <span
-                                        :class="{
-                                            'is-expired': !cursorAccountsInfo.email,
-                                            'is-trial': cursorAccountsInfo.email,
-                                        }"
-                                    >
-                                        {{ cursorAccountsInfo.email || "未登录" }}
-                                    </span>
-                                </p>
-                                <p class="card-item">
-                                    <span class="card-item-label">订阅状态:</span>
-                                    <span
-                                        :class="{
-                                            'is-expired': accountInfoShow.membershipType === SUBSCRIBE_FREE_NAME,
-                                            'is-trial': accountInfoShow.membershipType === SUBSCRIBE_PRO_NAME,
-                                        }"
-                                    >
-                                        {{ accountInfoShow.membershipTypeShow }}
-                                    </span>
-                                </p>
-                                <!-- <p class="card-item">
-                                    <span class="card-item-label">令牌时效:</span>
-                                    <span
-                                        v-if="accountInfoShow.accessTokenExpStatus"
-                                        size="small"
-                                        :type="accountInfoShow.accessTokenExpStatus.type"
-                                    >
-                                        {{ accountInfoShow.accessTokenExpStatus.label }}
-                                    </span>
-                                </p> -->
-                                <p class="card-item">
-                                    <span class="card-item-label">模型用量:</span>
-                                    <template v-if="accountInfoShow.modelUsageTotal">
-                                        <span
-                                            >{{ accountInfoShow.modelUsageUsed }} /
-                                            {{ accountInfoShow.modelUsageTotal }}
+                    <div class="home-layout">
+
+                        <!-- 左列 -->
+                        <div class="home-col-left">
+                            <div class="left-col-inner">
+
+                                <!-- 当前登录账号 -->
+                                <el-card>
+                                    <div class="card-header">
+                                        <span>当前登录账号</span>
+                                    </div>
+                                    <div class="card-item">
+                                        <span class="card-item-label">登录邮箱:</span>
+                                        <span :class="{ 'is-expired': !cursorAccountsInfo.email, 'is-trial': cursorAccountsInfo.email }">
+                                            {{ cursorAccountsInfo.email || "未登录" }}
                                         </span>
-                                        <el-progress
-                                            class="model-usage-progress"
-                                            :percentage="
-                                                accountInfoShow.modelUsageTotal
-                                                    ? (accountInfoShow.modelUsageUsed /
-                                                          accountInfoShow.modelUsageTotal) *
-                                                      100
-                                                    : 0
-                                            "
-                                            :show-text="false"
-                                            :stroke-width="10"
-                                            striped
-                                            striped-flow
-                                            :duration="15"
-                                        />
-                                    </template>
-                                    <template v-else>
-                                        <span class="is-trial">无限制</span>
-                                    </template>
-                                </p>
-                                <el-icon
-                                    class="refresh-icon"
-                                    :class="{ 'is-loading': isRefreshLoading }"
-                                    :size="20"
-                                    @click="refresh"
-                                    ><Refresh
-                                /></el-icon>
-                            </el-card>
-                            <el-card style="">
-                                <div class="card-header">
-                                    <span>版本信息</span>
+                                    </div>
+                                    <div class="card-item">
+                                        <span class="card-item-label">订阅状态:</span>
+                                        <span :class="{ 'is-expired': accountInfoShow.membershipType === SUBSCRIBE_FREE_NAME, 'is-trial': accountInfoShow.membershipType === SUBSCRIBE_PRO_NAME }">
+                                            {{ accountInfoShow.membershipTypeShow }}
+                                        </span>
+                                    </div>
+                                    <div class="card-item">
+                                        <span class="card-item-label">模型用量:</span>
+                                        <span v-if="accountInfoShow.modelUsageTotal">
+                                            {{ accountInfoShow.modelUsageUsed }} / {{ accountInfoShow.modelUsageTotal }}
+                                        </span>
+                                        <span v-else class="is-trial">无限制</span>
+                                    </div>
+                                    <el-progress
+                                        v-if="accountInfoShow.modelUsageTotal"
+                                        class="model-usage-progress"
+                                        :percentage="(accountInfoShow.modelUsageUsed / accountInfoShow.modelUsageTotal) * 100"
+                                        :show-text="false"
+                                        :stroke-width="10"
+                                        striped
+                                        striped-flow
+                                        :duration="15"
+                                    />
+                                    <el-icon class="refresh-icon" :class="{ 'is-loading': isRefreshLoading }" :size="20" @click="refresh">
+                                        <Refresh />
+                                    </el-icon>
+                                </el-card>
+
+                                <!-- 功能 -->
+                                <el-card>
+                                    <div class="card-header">功能</div>
+                                    <el-tooltip :visible="!appConfig.path_cursor_exe ? undefined : false" content="未找到Cursor安装路径，打开Cursor后点击刷新重新查找" effect="customized" placement="right">
+                                        <div class="card-item check-item">
+                                            <span class="card-item-label">获取 Cursor 安装路径</span>
+                                            <el-icon v-if="appConfig.path_cursor_exe" class="check-icon" :size="20" style="color: #67c23a"><CircleCheck /></el-icon>
+                                            <el-icon v-else class="check-icon" :size="20" style="color: #f56c6c"><WarningFilled /></el-icon>
+                                        </div>
+                                    </el-tooltip>
+                                    <el-tooltip :visible="!appConfig.path_cursor_user_db ? undefined : false" content="未找到Cursor数据文件路径，建议安装默认路径" effect="customized" placement="right">
+                                        <div class="card-item check-item">
+                                            <span class="card-item-label">获取 Cursor 数据文件路径</span>
+                                            <el-icon v-if="appConfig.path_cursor_user_db" class="check-icon" :size="20" style="color: #67c23a"><CircleCheck /></el-icon>
+                                            <el-icon v-else class="check-icon" :size="20" style="color: #f56c6c"><WarningFilled /></el-icon>
+                                        </div>
+                                    </el-tooltip>
+                                    <div class="card-item btn-item">
+                                        <span class="card-item-label">重置机器码</span>
+                                        <el-button @click="resetMachine">重置机器码</el-button>
+                                    </div>
+                                    <div class="card-item btn-item">
+                                        <span class="card-item-label">备份Cursor设置、快捷键...</span>
+                                        <el-button @click="backup">备份设置</el-button>
+                                    </div>
+                                    <div class="card-item btn-item">
+                                        <span class="card-item-label">备份恢复</span>
+                                        <el-button @click="restoreBackup">备份恢复</el-button>
+                                    </div>
+                                    <div class="card-item btn-item">
+                                        <span class="card-item-label">账号库备份</span>
+                                        <el-button @click="backupAccountDb">备份账号库</el-button>
+                                    </div>
+                                    <div class="card-item btn-item">
+                                        <span class="card-item-label">账号库恢复</span>
+                                        <el-button @click="restoreAccountDb">恢复账号库</el-button>
+                                    </div>
+                                    <div class="card-item btn-item">
+                                        <span class="card-item-label">
+                                            定时采集
+                                            <span class="collect-desc">每秒检测账号切换，自动存入账号库（未使用状态）</span>
+                                        </span>
+                                        <el-button :type="autoCollectEnabled ? 'danger' : 'success'" plain @click="toggleAutoCollect">
+                                            {{ autoCollectEnabled ? "停止采集" : "开始采集" }}
+                                        </el-button>
+                                    </div>
+                                </el-card>
+
+                                <!-- 无感换号 -->
+                                <div class="feature-card">
+                                    <div class="feature-card-header">
+                                        <div class="header-left">
+                                            <div class="section-bar"></div>
+                                            <span class="card-title">无感换号</span>
+                                        </div>
+                                    </div>
+                                    <div class="feature-row">
+                                        <div class="feature-info">
+                                            <span class="feature-label">注入状态</span>
+                                            <el-tag :type="patchStatus.patched ? 'success' : 'info'" size="small" style="margin-left: 8px">
+                                                {{ patchStatus.patched ? "已注入" : "未注入" }}
+                                            </el-tag>
+                                        </div>
+                                        <div class="feature-actions">
+                                            <el-button v-if="!patchStatus.patched" type="primary" size="small" :loading="patchLoading" :disabled="!patchStatus.targetExists" @click="handleApplyPatch">开启无感换号</el-button>
+                                            <el-button v-else type="danger" size="small" plain :loading="patchLoading" @click="handleRestorePatch">关闭无感换号</el-button>
+                                        </div>
+                                    </div>
+                                    <div v-if="!patchStatus.targetExists" class="tip-box tip-warning">
+                                        未找到 Cursor 安装文件，请确认 Cursor 已安装到默认路径
+                                    </div>
+                                    <div v-if="patchStatus.patched" class="tip-box">开启后请保持 AI助手在后台运行，请不要完全退出，否则自动换号将无法生效。</div>
+                                    <div v-if="patchStatus.patched" class="tip-box">换号后请稍等几秒，或新开一个对话再试。若仍提示额度不足：关闭无感后重新获取账号登录。</div>
+                                    <div v-if="patchStatus.patched" class="toggle-row">
+                                        <div>
+                                            <div class="toggle-title">额度用尽时自动换号</div>
+                                            <div class="toggle-desc">默认关闭；开启后聊天出现 usage limit 或官方用量达标将自动换号（可能中断正在进行的 Agent/对话），关闭则需手动点「获取账号并登录」</div>
+                                        </div>
+                                        <el-switch :model-value="autoSwitchEnabled" @change="toggleAutoSwitch" />
+                                    </div>
+                                    <div v-if="patchStatus.patched && autoSwitchEnabled" class="stat-row">
+                                        <div class="stat-item">
+                                            <div class="stat-label">当前邮箱</div>
+                                            <div class="stat-value highlight">{{ autoSwitchStats.currentEmail || "—" }}</div>
+                                        </div>
+                                        <div class="stat-item">
+                                            <div class="stat-label">今日换号</div>
+                                            <div class="stat-value">{{ autoSwitchStats.todaySwitchCount ?? 0 }} 次</div>
+                                        </div>
+                                        <div class="stat-item">
+                                            <div class="stat-label">上次换号</div>
+                                            <div class="stat-value highlight">{{ autoSwitchStats.lastSwitchTime || "—" }}</div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <p class="card-item">
-                                    <span class="card-item-label"> 版本: </span>
+
+                                <!-- 禁用 Cursor 更新 -->
+                                <div class="feature-card">
+                                    <div class="toggle-row">
+                                        <div>
+                                            <div class="toggle-title">禁用 Cursor 更新</div>
+                                            <div class="toggle-desc">写入 update.mode=none，避免升级覆盖指纹补丁</div>
+                                        </div>
+                                        <div class="switch-with-label">
+                                            <span class="switch-status-label" :class="{ active: disableUpdateEnabled }">
+                                                {{ disableUpdateEnabled ? "已开启" : "已关闭" }}
+                                            </span>
+                                            <el-switch :model-value="disableUpdateEnabled" :loading="disableUpdateLoading" active-color="#67c23a" @change="toggleDisableUpdate" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <!-- 右列 -->
+                        <div class="home-col-right">
+
+                            <!-- 版本信息 -->
+                            <el-card class="version-card">
+                                <div class="card-header">版本信息</div>
+                                <div class="card-item">
+                                    <span class="card-item-label">版本:</span>
                                     <span v-if="systemInfo.platform === 'win32'">Windows</span>
                                     <span v-else-if="systemInfo.platform === 'darwin'">Mac</span>
                                     <span v-else-if="systemInfo.platform === 'linux'">Linux</span>
@@ -750,165 +973,46 @@
                                     &nbsp;|&nbsp;
                                     <span>{{ appConfig.appName }}{{ appConfig.version }}</span>
                                     &nbsp;|&nbsp;
-                                    <span> Cursor {{ appConfig.cursorVersion }} </span>
-                                </p>
-
-                                <p class="card-item">
+                                    <span>Cursor {{ appConfig.cursorVersion }}</span>
+                                </div>
+                                <div class="card-item">
                                     <span class="card-item-label">machineGuid:</span>
                                     <span class="card-item-value">{{ cursorAccountsInfo.machineGuid }}</span>
-                                </p>
-                                <p class="card-item">
+                                </div>
+                                <div class="card-item">
                                     <span class="card-item-label">machineId:</span>
                                     <span class="card-item-value">{{ cursorAccountsInfo.machineId }}</span>
-                                </p>
-                                <!-- <p class="card-item">
-                                    <span class="card-item-label">machineId_ASCII:</span>
-                                    <span>{{ cursorAccountsInfo.machineId_ASCII }}</span>
-                                </p>
-                                <p class="card-item">
-                                    <span class="card-item-label">macMachineId:</span>
-                                    <span>{{ cursorAccountsInfo.macMachineId }}</span>
-                                </p>
-                                <p class="card-item">
-                                    <span class="card-item-label">devDeviceId:</span>
-                                    <span>{{ cursorAccountsInfo.devDeviceId }}</span>
-                                </p>
-                                <p class="card-item">
-                                    <span class="card-item-label">sqmId:</span>
-                                    <span>{{ cursorAccountsInfo.sqmId }}</span>
-                                </p> -->
-
-                                <el-icon
-                                    v-if="false"
-                                    class="refresh-icon"
-                                    :class="{ 'is-loading': isRefreshLoading }"
-                                    :size="20"
-                                    @click="refresh"
-                                    ><Refresh
-                                /></el-icon>
-                            </el-card>
-                        </div>
-                        <div class="card-container">
-                            <el-card style="">
-                                <div class="card-header" style="margin-bottom: 3px">
-                                    <span>功能</span>
                                 </div>
-
-                                <el-tooltip
-                                    :visible="!appConfig.path_cursor_exe ? undefined : false"
-                                    content="未找到Cursor安装路径，打开Cursor后点击刷新重新查找"
-                                    effect="customized"
-                                    placement="right"
-                                >
-                                    <p class="card-item check-item">
-                                        <span class="card-item-label">获取 Cursor 安装路径</span>
-                                        <span v-if="appConfig.path_cursor_exe">
-                                            <el-icon class="check-icon" :size="20" style="color: #67c23a"
-                                                ><CircleCheck
-                                            /></el-icon>
-                                        </span>
-                                        <span v-else>
-                                            <el-icon class="check-icon" :size="20" style="color: #f56c6c"
-                                                ><WarningFilled
-                                            /></el-icon>
-                                        </span>
-                                    </p>
-                                </el-tooltip>
-
-                                <el-tooltip
-                                    :visible="!appConfig.path_cursor_user_db ? undefined : false"
-                                    content="未找到Cursor数据文件路径，建议安装默认路径"
-                                    effect="customized"
-                                    placement="right"
-                                >
-                                    <p class="card-item check-item">
-                                        <span class="card-item-label">获取 Cursor 数据文件路径</span>
-                                        <span v-if="appConfig.path_cursor_user_db">
-                                            <el-icon class="check-icon" :size="20" style="color: #67c23a"
-                                                ><CircleCheck
-                                            /></el-icon>
-                                        </span>
-                                        <span v-else>
-                                            <el-icon class="check-icon" :size="20" style="color: #f56c6c"
-                                                ><WarningFilled
-                                            /></el-icon>
-                                        </span>
-                                    </p>
-                                </el-tooltip>
-
-                                <p class="card-item btn-item">
-                                    <span class="card-item-label">重置机器码</span>
-                                    <el-button @click="resetMachine">重置机器码</el-button>
-                                </p>
-                                <p class="card-item btn-item">
-                                    <span class="card-item-label">备份Cursor设置、快捷键...</span>
-                                    <el-button @click="backup">备份设置</el-button>
-                                </p>
-                                <p class="card-item btn-item">
-                                    <span class="card-item-label">备份恢复</span>
-                                    <el-button @click="restoreBackup">备份恢复</el-button>
-                                </p>
-                                <!-- <p class="card-item btn-item">
-                                    <span class="card-item-label">阻止更新</span>
-                                    <el-button @click="restoreBackup">阻止更新</el-button>
-                                </p> -->
-                                <p class="card-item btn-item">
-                                    <span class="card-item-label">
-                                        定时采集
-                                        <span class="collect-desc">每秒检测账号切换，自动存入账号库（未使用状态）</span>
-                                    </span>
-                                    <el-button
-                                        :type="autoCollectEnabled ? 'danger' : 'success'"
-                                        plain
-                                        @click="toggleAutoCollect"
-                                    >
-                                        {{ autoCollectEnabled ? "停止采集" : "开始采集" }}
-                                    </el-button>
-                                </p>
                             </el-card>
-                            <el-card class="log-card" style="">
+
+                            <!-- 日志 -->
+                            <el-card class="log-card">
                                 <div class="card-header">
                                     <span>日志</span>
-                                    <el-icon
-                                        class="refresh-icon clear-logs-icon"
-                                        style="font-size: 16px; right: 25px; top: 18px"
-                                        @click="clearLogs"
-                                        ><Delete
-                                    /></el-icon>
+                                    <el-icon class="refresh-icon clear-logs-icon" style="font-size: 16px; right: 25px; top: 18px" @click="clearLogs">
+                                        <Delete />
+                                    </el-icon>
                                 </div>
                                 <el-scrollbar ref="logScrollbarRef" class="log-container">
-                                    <p
-                                        v-for="(log, index) in logs"
-                                        :key="index"
-                                        class="log-item"
-                                        :class="`log-item-${log.level}`"
-                                    >
+                                    <div v-for="(log, index) in logs" :key="index" class="log-item" :class="`log-item-${log.level}`">
                                         {{ log.message }}
-                                    </p>
+                                    </div>
                                 </el-scrollbar>
                             </el-card>
+
                         </div>
-                    </el-scrollbar>
+                    </div>
                 </div>
             </el-tab-pane>
+
+            <!-- ══ 账号 ══ -->
             <el-tab-pane label="账号" name="second">
                 <div class="body-card-item">
                     <AccountManagement ref="accountManagementRef" @show-use-account-dialog="showUseAccountDialog" />
                 </div>
             </el-tab-pane>
-            <!-- <el-tab-pane label="功能" name="third">
-                <div class="body-card-item">
-                    <el-scrollbar>
-                        <el-button type="primary" @click="register">注册</el-button>
-                    </el-scrollbar>
-                </div>
-            </el-tab-pane> -->
-            <el-tab-pane label="设置" name="fourth">
-                <div class="body-card-item">
-                    <Settings ref="settingsRef" />
-                </div>
-            </el-tab-pane>
 
+            <!-- ══ 关于 ══ -->
             <el-tab-pane label="关于" name="fifth">
                 <el-scrollbar>
                     <div class="body-card-item" style="padding-top: 20px">
@@ -918,30 +1022,27 @@
                                 :key="index"
                                 class="about-notice-item"
                                 :class="{ 'has-link': notice.url }"
-                                :style="{
-                                    color: notice.color || (notice.url ? 'var(--el-color-primary)' : ''),
-                                    'font-size': notice.fontSize || '',
-                                }"
+                                :style="{ color: notice.color || (notice.url ? 'var(--el-color-primary)' : ''), 'font-size': notice.fontSize || '' }"
                                 @click="notice.url ? openLink(notice.url) : null"
                             >
                                 {{ notice.title }}: {{ notice.message }}
                             </div>
                         </div>
-
+                        <!-- 帮助文档按钮 -->
+                        <div class="about-actions">
+                            <el-button type="primary" plain @click="openHelpDoc">📖 使用帮助文档</el-button>
+                        </div>
                         <div class="license-display">
-                            <div>Fly Cursor {{ versionText }}</div>
+                            <div>CursorHub {{ versionText }}</div>
                             <div>联系QQ：807600577</div>
                             <div v-if="signatureText">{{ signatureText }}</div>
                         </div>
                     </div>
                 </el-scrollbar>
             </el-tab-pane>
+
         </el-tabs>
-        <UseAccountConfirmationDialog
-            v-model="useAccountDialogVisible"
-            :account="accountToUse"
-            @confirm="handleConfirmUseAccount"
-        />
+        <UseAccountConfirmationDialog v-model="useAccountDialogVisible" :account="accountToUse" @confirm="handleConfirmUseAccount" />
         <SettingsDialog v-model="settingsDialogVisible" />
         <BackupSettingsDialog v-model="backupSettingsDialogVisible" />
         <RestoreBackupDialog v-model="restoreBackupDialogVisible" />
@@ -968,169 +1069,201 @@
         height: calc(100vh - 120px);
         padding: 10px;
         background-color: #f8f9fa26;
-        // box-shadow: 0 0 5px 0px rgb(64 64 64 / 50%);
         box-shadow: 0 5px 25px rgba(0, 0, 0, 0.05);
         border-radius: 10px;
+        box-sizing: border-box;
 
-        .card-container {
+        /* ── 两列主布局 ── */
+        .home-layout {
             display: flex;
             flex-direction: row;
-            flex-wrap: wrap;
+            align-items: flex-start;
             gap: 10px;
-            margin-bottom: 10px;
-            .el-card {
+            height: 100%;
+        }
+
+        /* 左列：高度自适应内容，内容超出时滚动 */
+        .home-col-left {
+            flex: 1;
+            min-width: 0;
+            height: fit-content;
+            overflow-x: hidden;
+
+            .left-col-inner {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                padding-right: 4px;
+            }
+        }
+
+        /* 右列：撑满剩余高度，flex 竖排，日志撑满剩余高度 */
+        .home-col-right {
+            flex: 1;
+            min-width: 0;
+            align-self: stretch;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* 版本卡片高度自适应 */
+        .version-card {
+            flex-shrink: 0;
+        }
+
+        /* 日志卡片撑满剩余高度 */
+        .log-card {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+
+            :deep(.el-card__body) {
                 flex: 1;
-                position: relative;
-                --el-card-bg-color: #f8f9fa0a;
-                --el-card-border-color: #f8f9fa00;
-                --el-card-border-radius: 10px;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+                padding-top: 10px;
+            }
+        }
 
-                color: var(--ev-c-text-1);
-                max-width: 1880px;
-                min-width: 300px;
-                :deep(.el-card__body) {
-                    padding-top: 10px;
-                }
-                &.log-card {
-                    // height: 100%;
-                    :deep(.el-card__body) {
-                        // height: 100%;
-                        height: 450px;
-                        display: flex;
-                        flex-direction: column;
-                        .el-scrollbar {
-                            flex-grow: 1;
-                            min-height: 0;
-                            padding-bottom: 0;
-                            padding-top: 0;
-                            .el-scrollbar__view {
-                                padding-bottom: 10px;
-                            }
-                        }
-                    }
-                }
-                .card-header {
-                    font-size: 16px;
-                    font-weight: 800;
+        /* el-card 通用样式 */
+        .el-card {
+            --el-card-bg-color: #f8f9fa0a;
+            --el-card-border-color: #f8f9fa00;
+            --el-card-border-radius: 10px;
+            color: var(--ev-c-text-1);
+            position: relative;
+
+            :deep(.el-card__body) {
+                padding-top: 10px;
+            }
+        }
+
+        .card-header {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--el-color-primary);
+            user-select: none;
+            margin-bottom: 3px;
+
+            .clear-logs-icon {
+                cursor: pointer;
+                position: absolute;
+                right: 20px;
+                top: 20px;
+                color: var(--ev-c-text-2);
+                &:hover {
                     color: var(--el-color-primary);
-                    user-select: none;
-                    .clear-logs-icon {
-                        cursor: pointer;
-                        position: absolute;
-                        right: 20px;
-                        top: 20px;
-                        color: var(--ev-c-text-2);
-                        &:hover {
-                            color: var(--el-color-primary);
-                        }
-                    }
                 }
-                .card-item {
-                    display: flex;
-                    font-size: 14px;
-                    margin-top: 10px;
-                    word-break: break-all;
-                    &.check-item {
-                        align-items: center;
-                        justify-content: space-between;
-                        margin-top: 0px;
-                    }
-                    &.btn-item {
-                        align-items: center;
-                        justify-content: space-between;
-                        .el-button {
-                            color: var(--ev-c-text-1);
-                            --el-button-bg-color: #ffffff15;
-                            --el-button-border-color: #ffffff15;
+            }
+        }
 
-                            &:hover {
-                                color: var(--el-color-primary);
-                            }
-                        }
-                        .collect-desc {
-                            display: block;
-                            font-size: 11px;
-                            color: rgba(255, 255, 255, 0.2);
-                            margin-top: 2px;
-                            font-weight: normal;
-                        }
-                    }
+        .card-item {
+            display: flex;
+            font-size: 14px;
+            margin-top: 10px;
+            word-break: break-all;
 
-                    .card-item-label {
-                        flex-grow: 1;
-                        flex-shrink: 0;
-                        color: rgba(255, 255, 255, 0.308);
-                        display: inline-block;
-                        // min-width: 100px;
-                        margin-right: 10px;
-                        user-select: none;
-                    }
-                    .card-item-value {
-                        display: inline-block;
-                        max-width: 38ch;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                        white-space: nowrap;
-                        direction: rtl;
-                        text-align: left;
-                        vertical-align: bottom;
-                        // margin-left: 30px;
-                    }
-                    .is-trial {
-                        color: #67c23a;
-                    }
-                    .is-expired {
-                        color: #f56c6c;
-                    }
-                }
-                .refresh-icon {
-                    cursor: pointer;
-                    position: absolute;
-                    right: 20px;
-                    top: 20px;
+            &.check-item {
+                align-items: center;
+                justify-content: space-between;
+                margin-top: 0px;
+            }
+            &.btn-item {
+                align-items: center;
+                justify-content: space-between;
+                .el-button {
+                    color: var(--ev-c-text-1);
+                    --el-button-bg-color: #ffffff15;
+                    --el-button-border-color: #ffffff15;
                     &:hover {
                         color: var(--el-color-primary);
                     }
                 }
-            }
-            .model-usage-progress {
-                margin-top: 10px;
-                .el-progress-bar__outer {
-                    background-color: #f8f9fa1f;
+                .collect-desc {
+                    display: block;
+                    font-size: 11px;
+                    color: rgba(255, 255, 255, 0.2);
+                    margin-top: 2px;
+                    font-weight: normal;
                 }
             }
-            .log-container {
-                margin-top: 10px;
-                background-color: #0000001a;
-                padding: 0;
-                border-radius: 5px;
-                font-size: 12px;
-                :deep(.el-scrollbar__view) {
-                    padding: 10px;
-                }
-                .log-item {
-                    margin: 0;
-                    padding: 2px 0;
-                    color: var(--ev-c-text-2);
-                    word-break: break-all;
-                    white-space: pre-wrap;
-                }
-                .log-item-error {
-                    color: #f56c6c;
-                }
-                .log-item-account {
-                    color: #67c23a;
-                }
-                .log-item-success {
-                    color: #67c23a;
-                }
-                .log-item-warning {
-                    color: #e6a23c;
-                }
+
+            .card-item-label {
+                flex-grow: 1;
+                flex-shrink: 0;
+                color: rgba(255, 255, 255, 0.308);
+                display: inline-block;
+                margin-right: 10px;
+                user-select: none;
+            }
+            .card-item-value {
+                display: inline-block;
+                max-width: 38ch;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                direction: rtl;
+                text-align: left;
+                vertical-align: bottom;
+            }
+            .is-trial {
+                color: #67c23a;
+            }
+            .is-expired {
+                color: #f56c6c;
             }
         }
-    }
 
+        .refresh-icon {
+            cursor: pointer;
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            &:hover {
+                color: var(--el-color-primary);
+            }
+        }
+
+        .model-usage-progress {
+            margin-top: 10px;
+            .el-progress-bar__outer {
+                background-color: #f8f9fa1f;
+            }
+        }
+
+        .log-container {
+            flex: 1;
+            min-height: 0;
+            margin-top: 10px;
+            background-color: #0000001a;
+            border-radius: 5px;
+            font-size: 12px;
+
+            :deep(.el-scrollbar) {
+                height: 100%;
+            }
+            :deep(.el-scrollbar__wrap) {
+                height: 100%;
+            }
+            :deep(.el-scrollbar__view) {
+                padding: 10px;
+            }
+            .log-item {
+                margin: 0;
+                padding: 2px 0;
+                color: var(--ev-c-text-2);
+                word-break: break-all;
+                white-space: pre-wrap;
+            }
+            .log-item-error   { color: #f56c6c; }
+            .log-item-account { color: #67c23a; }
+            .log-item-success { color: #67c23a; }
+            .log-item-warning { color: #e6a23c; }
+        }
+    }
     .license-display {
         position: absolute;
         bottom: 20px;
@@ -1152,5 +1285,147 @@
             cursor: pointer;
             text-decoration: underline;
         }
+    }
+
+    .about-actions {
+        display: flex;
+        justify-content: center;
+        margin: 20px 0 10px;
+    }
+
+    /* ── feature card 样式（左列内使用） ── */
+    .feature-card {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 16px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .feature-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .section-bar {
+        width: 4px;
+        height: 16px;
+        background: var(--el-color-primary);
+        border-radius: 2px;
+    }
+
+    .card-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #e0e0e0;
+    }
+
+    .feature-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .feature-info {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .feature-label {
+        font-size: 13px;
+        color: #bbb;
+    }
+
+    .feature-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .tip-box {
+        font-size: 12px;
+        color: #999;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 6px;
+        padding: 8px 12px;
+        line-height: 1.6;
+    }
+
+    .tip-warning {
+        color: #e6a23c;
+        background: rgba(230, 162, 60, 0.08);
+    }
+
+    .toggle-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .toggle-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #e0e0e0;
+        margin-bottom: 4px;
+    }
+
+    .toggle-desc {
+        font-size: 12px;
+        color: #888;
+        max-width: 380px;
+        line-height: 1.6;
+    }
+
+    .switch-with-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .switch-status-label {
+        font-size: 12px;
+        color: #888;
+    }
+
+    .switch-status-label.active {
+        color: #67c23a;
+    }
+
+    .stat-row {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+
+    .stat-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .stat-label {
+        font-size: 12px;
+        color: #999;
+    }
+
+    .stat-value {
+        font-size: 13px;
+        color: #e0e0e0;
+    }
+
+    .stat-value.highlight {
+        color: #67c23a;
+        font-weight: 500;
     }
 </style>

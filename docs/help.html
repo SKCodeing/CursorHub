@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CursorHub 使用帮助</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #0f1923;
+            color: #d0d8e8;
+            line-height: 1.7;
+            font-size: 15px;
+        }
+
+        /* ── 侧边栏 ── */
+        .sidebar {
+            position: fixed;
+            top: 0; left: 0;
+            width: 240px;
+            height: 100vh;
+            background: #0a1018;
+            border-right: 1px solid #1e2d3d;
+            overflow-y: auto;
+            padding: 24px 0;
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 20px 24px;
+            border-bottom: 1px solid #1e2d3d;
+            margin-bottom: 16px;
+        }
+
+        .sidebar-logo .icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, #1a3a5c, #0d5c3a);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+        }
+
+        .sidebar-logo .name {
+            font-size: 17px;
+            font-weight: 700;
+            color: #e0eaf8;
+        }
+
+        .sidebar-logo .version {
+            font-size: 11px;
+            color: #4a6a8a;
+            margin-top: 1px;
+        }
+
+        .nav-group-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #3a5a7a;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 8px 20px 4px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 20px;
+            color: #7a9ab8;
+            text-decoration: none;
+            font-size: 14px;
+            border-left: 2px solid transparent;
+            transition: all 0.15s;
+        }
+
+        .nav-item:hover {
+            color: #a0c0e0;
+            background: #111e2a;
+            border-left-color: #2a5a8a;
+        }
+
+        .nav-item.active {
+            color: #4ade80;
+            border-left-color: #4ade80;
+            background: #0d1f12;
+        }
+
+        .nav-dot {
+            width: 5px; height: 5px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: 0.5;
+            flex-shrink: 0;
+        }
+
+        /* ── 主内容 ── */
+        .main {
+            margin-left: 240px;
+            padding: 48px 60px;
+            max-width: 960px;
+        }
+
+        /* ── 章节 ── */
+        .section {
+            margin-bottom: 64px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid #1e2d3d;
+        }
+
+        .section-num {
+            width: 30px; height: 30px;
+            background: linear-gradient(135deg, #1a5c3a, #1a3a5c);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            color: #4ade80;
+            flex-shrink: 0;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #e0eaf8;
+        }
+
+        h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #c0d8f0;
+        }
+
+        h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #90b8d8;
+            margin: 20px 0 8px;
+        }
+
+        p {
+            color: #8090a8;
+            margin-bottom: 12px;
+        }
+
+        /* ── Hero ── */
+        .hero {
+            background: linear-gradient(135deg, #0d1e2e 0%, #0a1a0e 100%);
+            border: 1px solid #1e3a2e;
+            border-radius: 16px;
+            padding: 36px 40px;
+            margin-bottom: 48px;
+        }
+
+        .hero h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .hero p {
+            font-size: 16px;
+            color: #6a8a7a;
+            max-width: 600px;
+        }
+
+        .badge-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-green { background: #0d2a18; color: #4ade80; border: 1px solid #1a5c30; }
+        .badge-blue  { background: #0a1a30; color: #60a8f0; border: 1px solid #1a3a6a; }
+        .badge-gray  { background: #151f2a; color: #7090b0; border: 1px solid #1e2d3d; }
+
+        /* ── 卡片 ── */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .card {
+            background: #111e2a;
+            border: 1px solid #1e2d3d;
+            border-radius: 12px;
+            padding: 18px 20px;
+        }
+
+        .card-icon {
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+
+        .card h3 {
+            font-size: 14px;
+            color: #c0d0e8;
+            margin: 0 0 6px;
+        }
+
+        .card p {
+            font-size: 13px;
+            color: #5a7898;
+            margin: 0;
+        }
+
+        /* ── 步骤 ── */
+        .steps {
+            counter-reset: step;
+        }
+
+        .step {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .step::before {
+            counter-increment: step;
+            content: counter(step);
+            width: 28px; height: 28px;
+            background: #0d2a40;
+            border: 1px solid #1e4a6a;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: #60a8f0;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .step-content h3 {
+            margin: 0 0 4px;
+            font-size: 14px;
+            color: #a0c0e0;
+        }
+
+        .step-content p {
+            margin: 0;
+            font-size: 13px;
+            color: #5a7898;
+        }
+
+        /* ── 提示框 ── */
+        .tip {
+            display: flex;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-size: 13px;
+        }
+
+        .tip-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+        .tip-content { color: inherit; }
+        .tip-content strong { display: block; margin-bottom: 2px; font-size: 13px; }
+
+        .tip-green  { background: #0d2a18; border: 1px solid #1a5c30; color: #4ade80; }
+        .tip-yellow { background: #2a1e08; border: 1px solid #5c3a10; color: #f0a840; }
+        .tip-blue   { background: #0a1a30; border: 1px solid #1a3a6a; color: #60a8f0; }
+        .tip-red    { background: #2a0e0e; border: 1px solid #5c1a1a; color: #f06060; }
+
+        /* ── 表格 ── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 13px;
+        }
+
+        th {
+            text-align: left;
+            padding: 10px 14px;
+            background: #0d1a24;
+            color: #5a7898;
+            font-weight: 600;
+            border-bottom: 1px solid #1e2d3d;
+        }
+
+        td {
+            padding: 10px 14px;
+            color: #7090b0;
+            border-bottom: 1px solid #141f2a;
+        }
+
+        tr:last-child td { border-bottom: none; }
+
+        td:first-child { color: #90b8d8; font-weight: 500; }
+
+        /* ── 代码 ── */
+        code {
+            background: #0d1a24;
+            border: 1px solid #1e2d3d;
+            border-radius: 4px;
+            padding: 2px 7px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 12px;
+            color: #4ade80;
+        }
+
+        .code-block {
+            background: #080f17;
+            border: 1px solid #1e2d3d;
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin: 12px 0;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 13px;
+            color: #4ade80;
+            line-height: 1.8;
+        }
+
+        /* ── 标签状态 ── */
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .tag-green  { background: #0d2a18; color: #4ade80; }
+        .tag-blue   { background: #0a1a30; color: #60a8f0; }
+        .tag-orange { background: #2a1a08; color: #f09040; }
+        .tag-red    { background: #2a0e0e; color: #f06060; }
+        .tag-gray   { background: #151f2a; color: #7090b0; }
+
+        /* ── FAQ ── */
+        .faq-item {
+            border: 1px solid #1e2d3d;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .faq-q {
+            padding: 14px 18px;
+            background: #111e2a;
+            color: #a0c0e0;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .faq-q::after { content: "▾"; color: #4a6a8a; font-size: 12px; }
+
+        .faq-a {
+            padding: 14px 18px;
+            background: #0a1420;
+            color: #6a8aa8;
+            font-size: 13px;
+            line-height: 1.7;
+            border-top: 1px solid #1e2d3d;
+        }
+
+        /* ── 分割线 ── */
+        hr {
+            border: none;
+            border-top: 1px solid #1e2d3d;
+            margin: 32px 0;
+        }
+
+        /* ── Footer ── */
+        footer {
+            margin-left: 240px;
+            padding: 24px 60px;
+            border-top: 1px solid #1e2d3d;
+            color: #3a5a7a;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; padding: 24px 20px; }
+            footer { margin-left: 0; padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- 侧边栏 -->
+<nav class="sidebar">
+    <div class="sidebar-logo">
+        <div class="icon">🎯</div>
+        <div>
+            <div class="name">CursorHub</div>
+            <div class="version">v1.1.3 · 使用帮助</div>
+        </div>
+    </div>
+
+    <div class="nav-group-title">入门</div>
+    <a class="nav-item active" href="#overview"><span class="nav-dot"></span>产品概述</a>
+    <a class="nav-item" href="#install"><span class="nav-dot"></span>安装与启动</a>
+
+    <div class="nav-group-title">功能详解</div>
+    <a class="nav-item" href="#home"><span class="nav-dot"></span>首页</a>
+    <a class="nav-item" href="#accounts"><span class="nav-dot"></span>账号管理</a>
+    <a class="nav-item" href="#seamless"><span class="nav-dot"></span>无感换号</a>
+    <a class="nav-item" href="#disable-update"><span class="nav-dot"></span>禁用更新</a>
+    <a class="nav-item" href="#backup"><span class="nav-dot"></span>备份与恢复</a>
+    <a class="nav-item" href="#collect"><span class="nav-dot"></span>定时采集</a>
+    <a class="nav-item" href="#machine"><span class="nav-dot"></span>重置机器码</a>
+
+    <div class="nav-group-title">帮助</div>
+    <a class="nav-item" href="#faq"><span class="nav-dot"></span>常见问题</a>
+    <a class="nav-item" href="#tips"><span class="nav-dot"></span>使用建议</a>
+</nav>
+
+<!-- 主内容 -->
+<main class="main">
+
+    <!-- Hero -->
+    <div class="hero">
+        <h1>🎯 CursorHub</h1>
+        <p>Cursor 账号管理与无感换号工具，让你的 Cursor Pro 试用永不中断。</p>
+        <div class="badge-row">
+            <span class="badge badge-green">✓ 无感换号</span>
+            <span class="badge badge-green">✓ 账号池管理</span>
+            <span class="badge badge-blue">✓ 自动切换</span>
+            <span class="badge badge-blue">✓ 备份恢复</span>
+            <span class="badge badge-gray">macOS arm64</span>
+        </div>
+    </div>
+
+    <!-- 1. 产品概述 -->
+    <section class="section" id="overview">
+        <div class="section-header">
+            <div class="section-num">1</div>
+            <h2>产品概述</h2>
+        </div>
+
+        <p>CursorHub 是一款 Cursor 账号管理工具，核心解决以下问题：</p>
+
+        <div class="card-grid">
+            <div class="card">
+                <div class="card-icon">🔄</div>
+                <h3>无感换号</h3>
+                <p>通过注入 Cursor 本体，在 AI 对话额度用尽时自动推送新 token，无需重启 Cursor。</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">📦</div>
+                <h3>账号池管理</h3>
+                <p>本地 SQLite 数据库存储多个账号，支持增删查、导入导出、批量刷新状态。</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">💾</div>
+                <h3>备份恢复</h3>
+                <p>一键备份 Cursor 的设置、快捷键、扩展、代码片段，随时还原。</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">🛡️</div>
+                <h3>禁用自动更新</h3>
+                <p>写入 <code>update.mode=none</code>，防止 Cursor 升级覆盖注入补丁。</p>
+            </div>
+        </div>
+
+        <div class="tip tip-yellow">
+            <span class="tip-icon">⚠️</span>
+            <div class="tip-content">
+                <strong>使用前提</strong>
+                CursorHub 需要 Cursor 安装在默认路径，且本机已正常安装 Cursor。首次启动后点击「刷新」按钮让工具自动检测路径。
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. 安装与启动 -->
+    <section class="section" id="install">
+        <div class="section-header">
+            <div class="section-num">2</div>
+            <h2>安装与启动</h2>
+        </div>
+
+        <div class="steps">
+            <div class="step">
+                <div class="step-content">
+                    <h3>下载 DMG 文件</h3>
+                    <p>下载 <code>CursorHub-1.1.3-arm64.dmg</code>，双击打开。</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-content">
+                    <h3>拖入 Applications</h3>
+                    <p>将 CursorHub.app 拖入 Applications 文件夹。</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-content">
+                    <h3>首次打开（绕过 Gatekeeper）</h3>
+                    <p>由于应用未经 Apple 公证，首次需要<strong>右键 → 打开</strong>，在弹出窗口点「打开」。之后可以正常双击启动。</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-content">
+                    <h3>点击刷新，初始化路径</h3>
+                    <p>首页点击右上角刷新图标，工具会自动检测 Cursor 安装路径和数据文件路径。两个绿色 ✓ 即为就绪。</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="tip tip-blue">
+            <span class="tip-icon">💡</span>
+            <div class="tip-content">
+                <strong>也可以通过命令行去掉隔离属性</strong>
+                <div class="code-block">xattr -cr /Applications/CursorHub.app</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. 首页 -->
+    <section class="section" id="home">
+        <div class="section-header">
+            <div class="section-num">3</div>
+            <h2>首页</h2>
+        </div>
+
+        <p>首页分为左右两列：</p>
+
+        <table>
+            <tr><th>区域</th><th>内容</th></tr>
+            <tr><td>当前登录账号</td><td>显示 Cursor 当前的登录邮箱、订阅状态（free_trial / free 等）、模型用量进度条，右上角刷新按钮可实时拉取最新状态。</td></tr>
+            <tr><td>功能区</td><td>常用操作入口：获取路径状态、重置机器码、备份设置、备份恢复、定时采集。</td></tr>
+            <tr><td>无感换号</td><td>注入状态、开关控制，注入后可开启「额度用尽自动换号」。</td></tr>
+            <tr><td>禁用 Cursor 更新</td><td>开关控制，防止升级覆盖注入补丁。</td></tr>
+            <tr><td>版本信息</td><td>系统平台、应用版本、Cursor 版本、机器码信息。</td></tr>
+            <tr><td>日志</td><td>实时显示操作日志，右上角垃圾桶图标可清空。</td></tr>
+        </table>
+
+        <h3>订阅状态说明</h3>
+        <table>
+            <tr><th>状态值</th><th>含义</th></tr>
+            <tr><td><span class="tag tag-orange">free_trial</span></td><td>14 天 Pro 试用，显示剩余天数</td></tr>
+            <tr><td><span class="tag tag-red">free</span></td><td>试用已失效，无法使用高级模型</td></tr>
+            <tr><td><span class="tag tag-green">pro / team</span></td><td>付费订阅，无限制</td></tr>
+        </table>
+    </section>
+
+    <!-- 4. 账号管理 -->
+    <section class="section" id="accounts">
+        <div class="section-header">
+            <div class="section-num">4</div>
+            <h2>账号管理</h2>
+        </div>
+
+        <p>「账号」Tab 是账号池的核心管理界面，支持以下操作：</p>
+
+        <div class="card-grid">
+            <div class="card">
+                <div class="card-icon">➕</div>
+                <h3>手动新增</h3>
+                <p>点击「新增」按钮，填入邮箱和 accessToken（或 WorkosCursorSessionToken）即可添加。</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">📥</div>
+                <h3>导入 JSON</h3>
+                <p>支持导入 JSON 格式的账号文件，字段与导出格式一致，可批量导入。</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">📤</div>
+                <h3>导出 JSON</h3>
+                <p>将本地账号池导出为 JSON 文件，方便备份或迁移到其他设备。</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">🔁</div>
+                <h3>批量刷新</h3>
+                <p>点击「批量更新」，对所有有效 token 的账号重新拉取订阅状态和用量信息。</p>
+            </div>
+        </div>
+
+        <h3>账号状态说明</h3>
+        <table>
+            <tr><th>状态</th><th>说明</th></tr>
+            <tr><td><span class="tag tag-green">使用中</span></td><td>当前 Cursor 正在使用的账号（绿色高亮行）</td></tr>
+            <tr><td><span class="tag tag-gray">未使用</span></td><td>从未被切换使用过</td></tr>
+            <tr><td><span class="tag tag-blue">已使用</span></td><td>用过但未检测到额度耗尽</td></tr>
+            <tr><td><span class="tag tag-red">已用尽</span></td><td>触发过 quota 耗尽事件，自动换号会跳过此账号</td></tr>
+        </table>
+
+        <h3>切换账号</h3>
+        <p>点击账号行的「使用」按钮，弹出切换确认框，可以选择：</p>
+        <table>
+            <tr><th>选项</th><th>说明</th></tr>
+            <tr><td>热切换（无感换号）</td><td>通过 token server 推送，Cursor 不重启，对话不中断。需先开启无感换号注入。</td></tr>
+            <tr><td>重置机器码</td><td>同时重置 machine-id，适合绑定机器的账号。</td></tr>
+            <tr><td>重启 Cursor</td><td>关闭并重新启动 Cursor 让账号生效。</td></tr>
+        </table>
+
+        <div class="tip tip-green">
+            <span class="tip-icon">✅</span>
+            <div class="tip-content">
+                <strong>最佳实践</strong>
+                开启无感换号后，优先使用热切换。不重启 Cursor 就能完成账号切换，用户体验最佳。
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. 无感换号 -->
+    <section class="section" id="seamless">
+        <div class="section-header">
+            <div class="section-num">5</div>
+            <h2>无感换号</h2>
+        </div>
+
+        <p>无感换号是 CursorHub 的核心功能，通过向 Cursor 本体注入一段 JS patch，让 Cursor 在需要时主动从本工具的 token server 拉取新 token，整个过程无需重启。</p>
+
+        <h3>开启步骤</h3>
+        <div class="steps">
+            <div class="step">
+                <div class="step-content">
+                    <h3>点击「开启无感换号」</h3>
+                    <p>首页无感换号卡片中，点击绿色按钮。注入成功后状态变为「已注入」。</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-content">
+                    <h3>保持 CursorHub 在后台运行</h3>
+                    <p>CursorHub 充当本地 token server（端口 14620），Cursor 换号时会请求此服务。不能完全退出 CursorHub。</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-content">
+                    <h3>（可选）开启自动换号</h3>
+                    <p>开启「额度用尽时自动换号」后，Cursor 检测到 usage limit 会自动从账号池取下一个账号切换，无需人工干预。</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="tip tip-yellow">
+            <span class="tip-icon">⚠️</span>
+            <div class="tip-content">
+                <strong>注意事项</strong>
+                自动换号可能中断正在进行的 Agent 任务。如不希望自动打断，保持关闭，需要时手动在账号列表点「使用」。
+            </div>
+        </div>
+
+        <h3>换号后不生效？</h3>
+        <p>换号后需要等待 1-3 秒让 Cursor 内存生效，或者新建一个对话窗口再试。若仍提示额度不足，尝试关闭无感换号、重新登录账号后再开启。</p>
+
+        <div class="tip tip-red">
+            <span class="tip-icon">🚫</span>
+            <div class="tip-content">
+                <strong>Cursor 升级会导致注入失效</strong>
+                Cursor 每次更新都会覆盖被注入的文件。建议在首页开启「禁用 Cursor 更新」，或每次升级后重新点击「开启无感换号」。
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. 禁用更新 -->
+    <section class="section" id="disable-update">
+        <div class="section-header">
+            <div class="section-num">6</div>
+            <h2>禁用 Cursor 更新</h2>
+        </div>
+
+        <p>开启后，工具会在 Cursor 的配置文件中写入 <code>update.mode=none</code>，阻止 Cursor 自动下载和安装更新，保护无感换号补丁不被覆盖。</p>
+
+        <table>
+            <tr><th>状态</th><th>说明</th></tr>
+            <tr><td><span class="tag tag-green">已开启</span></td><td>Cursor 不会自动更新，补丁安全</td></tr>
+            <tr><td><span class="tag tag-gray">已关闭</span></td><td>Cursor 可自动更新，升级后需重新注入补丁</td></tr>
+        </table>
+
+        <div class="tip tip-blue">
+            <span class="tip-icon">💡</span>
+            <div class="tip-content">
+                <strong>建议</strong>
+                使用无感换号期间保持此开关开启。若需手动升级 Cursor，先关闭此开关，升级后再重新开启并重新注入补丁。
+            </div>
+        </div>
+    </section>
+
+    <!-- 7. 备份与恢复 -->
+    <section class="section" id="backup">
+        <div class="section-header">
+            <div class="section-num">7</div>
+            <h2>备份与恢复</h2>
+        </div>
+
+        <p>CursorHub 支持备份 Cursor 的个人配置，包括：</p>
+        <ul style="margin: 0 0 16px 20px; color: #6a8aa8; font-size: 14px; line-height: 2;">
+            <li>用户设置（settings.json）</li>
+            <li>键盘快捷键（keybindings.json）</li>
+            <li>已安装扩展列表</li>
+            <li>代码片段（snippets）</li>
+        </ul>
+
+        <h3>备份</h3>
+        <div class="steps">
+            <div class="step">
+                <div class="step-content">
+                    <h3>点击首页「备份设置」</h3>
+                    <p>选择备份文件的保存位置，工具会将上述配置打包导出。</p>
+                </div>
+            </div>
+        </div>
+
+        <h3>恢复</h3>
+        <div class="steps">
+            <div class="step">
+                <div class="step-content">
+                    <h3>点击首页「备份恢复」</h3>
+                    <p>选择之前导出的备份文件，工具会将配置还原并重启 Cursor。</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="tip tip-yellow">
+            <span class="tip-icon">⚠️</span>
+            <div class="tip-content">
+                <strong>注意</strong>
+                恢复操作会覆盖当前 Cursor 的设置，请在恢复前确认备份文件来源正确。
+            </div>
+        </div>
+    </section>
+
+    <!-- 8. 定时采集 -->
+    <section class="section" id="collect">
+        <div class="section-header">
+            <div class="section-num">8</div>
+            <h2>定时采集</h2>
+        </div>
+
+        <p>定时采集功能每秒检测 Cursor 当前登录账号（读取本地 storage.json 和活跃 token server），发现新账号时自动写入本地账号池（状态为「未使用」）。</p>
+
+        <h3>适用场景</h3>
+        <ul style="margin: 0 0 16px 20px; color: #6a8aa8; font-size: 14px; line-height: 2;">
+            <li>在 Cursor 里手动登录了多个账号，想批量采集到账号池</li>
+            <li>通过自动注册脚本注册了账号，想边注册边采集</li>
+        </ul>
+
+        <div class="steps">
+            <div class="step">
+                <div class="step-content">
+                    <h3>点击「开始采集」</h3>
+                    <p>按钮变红，日志显示「已开启定时采集，每秒检测账号变化...」</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-content">
+                    <h3>在 Cursor 里切换账号</h3>
+                    <p>每次检测到新邮箱，CursorHub 自动将账号（含 token）存入账号池。</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-content">
+                    <h3>点击「停止采集」</h3>
+                    <p>结束后前往「账号」Tab 查看采集到的账号列表。</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="tip tip-blue">
+            <span class="tip-icon">💡</span>
+            <div class="tip-content">
+                采集到的账号初始状态均为「未使用」，不会影响已有的使用状态记录。
+            </div>
+        </div>
+    </section>
+
+    <!-- 9. 重置机器码 -->
+    <section class="section" id="machine">
+        <div class="section-header">
+            <div class="section-num">9</div>
+            <h2>重置机器码</h2>
+        </div>
+
+        <p>Cursor 使用 machineId、machineGuid 等标识符绑定设备。重置机器码会生成新的随机标识符，使 Cursor 认为是一台新设备，从而重置试用资格。</p>
+
+        <div class="tip tip-red">
+            <span class="tip-icon">🚫</span>
+            <div class="tip-content">
+                <strong>需要管理员权限</strong>
+                重置机器码需要写入系统级文件，操作时会弹出权限请求，请点击「允许」。
+            </div>
+        </div>
+
+        <h3>何时使用</h3>
+        <ul style="margin: 0 0 16px 20px; color: #6a8aa8; font-size: 14px; line-height: 2;">
+            <li>切换账号后 Cursor 仍提示设备已绑定</li>
+            <li>注册新账号前，确保机器码是全新的</li>
+            <li>配合「切换账号」使用，在账号管理页切换时勾选「重置机器码」选项</li>
+        </ul>
+    </section>
+
+    <!-- 10. FAQ -->
+    <section class="section" id="faq">
+        <div class="section-header">
+            <div class="section-num">10</div>
+            <h2>常见问题</h2>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">打开应用提示「无法打开，因为 Apple 无法检查其是否包含恶意软件」</div>
+            <div class="faq-a">
+                右键点击 CursorHub.app → 点击「打开」→ 在弹出窗口点「打开」。或在终端执行：
+                <div class="code-block">xattr -cr /Applications/CursorHub.app</div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">首页显示「未找到 Cursor 安装路径」</div>
+            <div class="faq-a">
+                确认 Cursor 已安装到默认路径（macOS: /Applications/Cursor.app）。先打开 Cursor，再回到 CursorHub 点击刷新按钮重新检测。
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">无感换号注入后，热切换没有效果</div>
+            <div class="faq-a">
+                1. 确认 CursorHub 没有完全退出（保持在后台）<br>
+                2. 切换后等待 1-3 秒，或新开一个对话窗口<br>
+                3. 如仍无效，尝试：关闭无感换号 → 重新开启 → 重新切换账号
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">升级 Cursor 后换号功能失效</div>
+            <div class="faq-a">
+                Cursor 升级会覆盖注入的补丁。重新打开 CursorHub，点击「开启无感换号」重新注入即可。建议开启「禁用 Cursor 更新」防止自动升级。
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">账号池里的账号不见了</div>
+            <div class="faq-a">
+                账号数据存储在本地 <code>~/Library/Application Support/CursorHub/cursor-hub-accounts.db</code>。如果是从旧版本（FlyCursor）升级，工具会自动从旧路径迁移数据，无需手动操作。
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">切换账号后 Cursor 还是提示额度不足</div>
+            <div class="faq-a">
+                该账号可能已经真正用尽（状态变为「已用尽」）。请在账号管理页选择一个「未使用」状态的账号，点击「使用」进行切换。
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-q">如何把 token 填入账号？</div>
+            <div class="faq-a">
+                在 Cursor 浏览器端登录后，从 cookie 中提取 <code>WorkosCursorSessionToken</code>（格式为 <code>user_xxx::eyJ...</code>），或从 storage.json 中获取 <code>cursorAuth/accessToken</code>。填入账号管理的新增对话框中的 Token 字段。
+            </div>
+        </div>
+    </section>
+
+    <!-- 11. 使用建议 -->
+    <section class="section" id="tips">
+        <div class="section-header">
+            <div class="section-num">11</div>
+            <h2>使用建议</h2>
+        </div>
+
+        <div class="tip tip-green">
+            <span class="tip-icon">🎯</span>
+            <div class="tip-content">
+                <strong>推荐工作流</strong>
+                开启无感换号 → 开启禁用更新 → 导入/采集多个账号 → 开启自动换号 → 正常使用 Cursor，额度到了自动切换，完全无感。
+            </div>
+        </div>
+
+        <table>
+            <tr><th>场景</th><th>建议操作</th></tr>
+            <tr><td>日常使用</td><td>开启无感换号 + 自动换号，保持 CursorHub 后台运行</td></tr>
+            <tr><td>账号快用完了</td><td>在账号管理页批量刷新，确认有「未使用」账号可用</td></tr>
+            <tr><td>Cursor 需要更新</td><td>先关闭「禁用更新」，更新完后重新开启并重新注入补丁</td></tr>
+            <tr><td>换新电脑</td><td>导出账号池 JSON → 新电脑导入 → 重置机器码 → 切换账号</td></tr>
+            <tr><td>账号池快空了</td><td>使用定时采集，配合其他账号来源批量补充账号</td></tr>
+        </table>
+    </section>
+
+</main>
+
+<footer>
+    <span>CursorHub v1.1.3 · 使用帮助文档</span>
+    <span>联系 QQ：807600577</span>
+</footer>
+
+<script>
+    // 点击侧边栏高亮当前章节
+    const navItems = document.querySelectorAll('.nav-item');
+    const sections = document.querySelectorAll('.section');
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                navItems.forEach(item => item.classList.remove('active'));
+                const active = document.querySelector(`.nav-item[href="#${entry.target.id}"]`);
+                if (active) active.classList.add('active');
+            }
+        });
+    }, { threshold: 0.3 });
+
+    sections.forEach(s => observer.observe(s));
+
+    // 平滑滚动
+    navItems.forEach(item => {
+        item.addEventListener('click', e => {
+            e.preventDefault();
+            const target = document.querySelector(item.getAttribute('href'));
+            if (target) target.scrollIntoView({ behavior: 'smooth' });
+        });
+    });
+</script>
+
+</body>
+</html>
