@@ -29,7 +29,7 @@
                 style="margin-bottom: 12px"
             >
                 <template #title>
-                    <span>⚠️ 未检测到 token server，将使用传统重启切换</span>
+                    <span>⚠️ 未开启无感换号注入，将使用传统重启切换（需关闭并重启 Cursor）</span>
                 </template>
             </el-alert>
 
@@ -76,8 +76,11 @@
         () => props.modelValue,
         async (newVal) => {
             if (newVal) {
-                const port = await window.api.getTokenServerPort();
-                hotSwitchAvailable.value = port > 0;
+                const [port, patchStatus] = await Promise.all([
+                    window.api.getTokenServerPort(),
+                    window.api.getPatchStatus(),
+                ]);
+                hotSwitchAvailable.value = port > 0 && patchStatus.patched === true;
                 useHotSwitch.value = hotSwitchAvailable.value;
             } else {
                 // 关闭时重置

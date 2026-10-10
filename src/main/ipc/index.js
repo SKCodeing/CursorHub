@@ -12,7 +12,7 @@ import { backup, listBackups, restoreBackup } from "../services/backup.js";
 import { handleApiRequest } from "../../utils/api.js";
 import { pushTokenToCursor, clearPendingToken, getServerPort } from "../services/tokenServer.js";
 import { setAutoSwitch, isAutoSwitchEnabled, setCurrentEmail, getAutoSwitchStats, getCurrentEmail } from "../services/autoSwitch.js";
-import { getPatchStatus, applyPatch, restorePatch, getDisableUpdateStatus, setDisableUpdate } from "../services/cursorSettings.js";
+import { getPatchStatus, applyPatch, restorePatch, restartCursor, getDisableUpdateStatus, setDisableUpdate } from "../services/cursorSettings.js";
 import {
     ensureDatabaseDirectoryExists,
     listAccounts,
@@ -110,11 +110,13 @@ function getJwtExp(token) {
     // ── 无感热切换（token server 推送，无需重启 Cursor） ───────
     ipcMain.handle("hot-switch-account", async (_, account) => {
         try {
-            if (!account?.accessToken) {
-                return { success: false, message: "缺少 accessToken" };
+            // optimalToken 是前端解析后的纯 JWT，优先使用
+            const token = account?.optimalToken || account?.accessToken;
+            if (!token) {
+                return { success: false, message: "缺少有效 accessToken" };
             }
             const result = await pushTokenToCursor({
-                accessToken: account.accessToken,
+                accessToken: token,
                 refreshToken: account.refreshToken || "",
                 email: account.email || "",
             });
@@ -122,7 +124,7 @@ function getJwtExp(token) {
             try {
                 writeCursorAccount({
                     email: account.email,
-                    accessToken: account.accessToken,
+                    accessToken: token,
                     refreshToken: account.refreshToken,
                     cachedSignUpType: account.cachedSignUpType || "Auth_0",
                 });
@@ -221,11 +223,20 @@ function getJwtExp(token) {
     });
 
     ipcMain.handle("apply-patch", async () => {
-        return applyPatch();
+        const result = await applyPatch();
+        if (result.success) {
+            // 异步重启，不阻塞响应，让前端先收到成功消息
+            restartCursor().catch(e => console.error("[apply-patch] 重启失败:", e.message));
+        }
+        return result;
     });
 
-    ipcMain.handle("restore-patch", () => {
-        return restorePatch();
+    ipcMain.handle("restore-patch", async () => {
+        const result = await restorePatch();
+        if (result.success) {
+            restartCursor().catch(e => console.error("[restore-patch] 重启失败:", e.message));
+        }
+        return result;
     });
 
     // ── 禁用 Cursor 更新 ──────────────────────────────────────

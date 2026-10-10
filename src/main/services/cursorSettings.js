@@ -1,0 +1,317 @@
+/**
+ * src/main/services/cursorSettings.js
+ *
+ * 管理 Cursor 的用户配置文件（settings.json）：
+ *   - 读取 / 写入 update.mode 禁用自动更新
+ *
+ * 管理 Cursor 主程序文件的注入（patch）和还原（restore）：
+ *   - 注入：在 workbench.desktop.main.js 中插入热切换 token 的轮询代码
+ *   - 还原：从 .bak 备份恢复原始文件
+ */
+
+import fs from "fs";
+import path from "path";
+import os from "os";
+import { execSync } from "child_process";
+import { getAppConfig } from "./config.js";
+
+// ─────────────────────────────────────────────────────────────
+// Cursor settings.json 路径
+// ─────────────────────────────────────────────────────────────
+
+function getSettingsJsonPath() {
+    const platform = process.platform;
+    const homeDir = os.homedir();
+    if (platform === "darwin") {
+        return path.join(homeDir, "Library/Application Support/Cursor/User/settings.json");
+    } else if (platform === "win32") {
+        const appData = process.env.APPDATA || path.join(homeDir, "AppData/Roaming");
+        return path.join(appData, "Cursor/User/settings.json");
+    } else {
+        return path.join(homeDir, ".config/Cursor/User/settings.json");
+    }
+}
+
+function readSettingsJson() {
+    const p = getSettingsJsonPath();
+    if (!fs.existsSync(p)) return {};
+    try {
+        return JSON.parse(fs.readFileSync(p, "utf8"));
+    } catch {
+        return {};
+    }
+}
+
+function writeSettingsJson(data) {
+    const p = getSettingsJsonPath();
+    try {
+        // 确保目录存在
+        fs.mkdirSync(path.dirname(p), { recursive: true });
+        fs.writeFileSync(p, JSON.stringify(data, null, 4), "utf8");
+        return true;
+    } catch (e) {
+        console.error("[cursorSettings] 写入 settings.json 失败:", e.message);
+        return false;
+    }
+}
+
+/**
+ * 获取「禁用 Cursor 自动更新」的当前状态
+ * @returns {boolean} true = 已禁用（update.mode === "none"）
+ */
+export function getDisableUpdateStatus() {
+    const settings = readSettingsJson();
+    return settings["update.mode"] === "none";
+}
+
+/**
+ * 设置「禁用 Cursor 自动更新」
+ * @param {boolean} disabled  true = 禁用（写入 none），false = 恢复默认（删除该键）
+ * @returns {{ success: boolean, message?: string }}
+ */
+export function setDisableUpdate(disabled) {
+    try {
+        const settings = readSettingsJson();
+        if (disabled) {
+            settings["update.mode"] = "none";
+        } else {
+            delete settings["update.mode"];
+        }
+        const ok = writeSettingsJson(settings);
+        return { success: ok, message: ok ? undefined : "写入 settings.json 失败" };
+    } catch (e) {
+        return { success: false, message: e.message };
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// patch / restore workbench.desktop.main.js
+// ─────────────────────────────────────────────────────────────
+
+function getWorkbenchPath() {
+    const config = getAppConfig();
+    const platform = process.platform;
+
+    if (platform === "darwin") {
+        const base = config.path_cursor_exe || "/Applications/Cursor.app";
+        return path.join(base, "Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js");
+    } else if (platform === "win32") {
+        if (config.path_cursor_exe) {
+            return path.join(path.dirname(config.path_cursor_exe), "resources/app/out/vs/workbench/workbench.desktop.main.js");
+        }
+    } else {
+        // Linux
+        const linuxPaths = [
+            "/opt/cursor/resources/app/out/vs/workbench/workbench.desktop.main.js",
+            "/usr/share/cursor/resources/app/out/vs/workbench/workbench.desktop.main.js",
+        ];
+        for (const p of linuxPaths) {
+            if (fs.existsSync(p)) return p;
+        }
+    }
+    return null;
+}
+
+const INJECT_MARKER = "/*__FLY_CURSOR_PATCH__*/";
+
+const INJECT_CODE = `${INJECT_MARKER}
+(function(){
+  try {
+    var _ports=[14620,14621,14622,14623,14624,14520,14521,14522,14523,14524];
+    var _port=0,_needResolve=true,_lastToken="",_self=this;
+    function _url(p){return"http://127.0.0.1:"+(_port||_ports[0])+p;}
+    async function _resolve(){
+      for(var i=0;i<_ports.length;i++){
+        var p=_ports[i];
+        try{
+          var r=await fetch("http://127.0.0.1:"+p+"/api/ping",{signal:AbortSignal.timeout(800)});
+          if(!r.ok)continue;
+          var d=await r.json();
+          if(d&&d.service==="cursor-login-assistant"){_port=p;_needResolve=false;return;}
+        }catch(e){}
+      }
+      _needResolve=true;
+    }
+    async function _tick(){
+      try{
+        if(_needResolve)await _resolve();
+        if(_needResolve)return;
+        var resp=await fetch(_url("/api/get-token"),{signal:AbortSignal.timeout(3000)});
+        if(!resp.ok)return;
+        var data=await resp.json();
+        if(!data||!data.enabled||!data.accessToken)return;
+        var newTok=String(data.accessToken||"").trim();
+        if(!newTok||newTok===_lastToken)return;
+        _lastToken=newTok;
+        var refreshTok=String(data.refreshToken||newTok).trim();
+        _self.storeAccessRefreshToken(newTok,refreshTok);
+        if(data.email){try{_self.storageService.store("cursorAuth/cachedEmail",data.email,-1,1);}catch(e){}}
+        console.log("[FlyCursor] hot-switched to",data.email||newTok.slice(0,20));
+        try{fetch(_url("/api/ack-switch"),{method:"POST"}).catch(function(){});}catch(e){}
+      }catch(e){
+        if(e&&e.name==="TypeError")_needResolve=true;
+      }
+    }
+    setInterval(_tick,1500);
+    _tick();
+  }catch(e){console.warn("[FlyCursor] patch error",e);}
+}).call(this);`;
+
+const INJECT_BEFORE = "this.storeEmailAndSignUpType=(r,s)=>{";
+
+/**
+ * 检查当前注入状态
+ * @returns {Promise<{ patched: boolean, targetExists: boolean, backupExists: boolean, targetPath: string|null }>}
+ */
+export async function getPatchStatus() {
+    const targetPath = getWorkbenchPath();
+    if (!targetPath) {
+        return { patched: false, targetExists: false, backupExists: false, targetPath: null };
+    }
+    const targetExists = fs.existsSync(targetPath);
+    const backupExists = fs.existsSync(targetPath + ".bak");
+    let patched = false;
+
+    if (targetExists) {
+        try {
+            // -F fixed-string 模式，完全不做正则/glob 解析
+            const result = execSync(
+                `grep -Fc '${INJECT_MARKER}' "${targetPath}" 2>/dev/null || echo 0`,
+                { encoding: "utf8", timeout: 5000 }
+            ).trim();
+            patched = parseInt(result, 10) > 0;
+        } catch {
+            patched = false;
+        }
+    }
+
+    return { patched, targetExists, backupExists, targetPath };
+}
+
+/**
+ * 关闭并重启 Cursor
+ */
+export async function restartCursor() {
+    const { execSync, spawn } = await import("child_process");
+    const config = getAppConfig();
+    const platform = process.platform;
+
+    // 关闭
+    try {
+        if (platform === "darwin") {
+            execSync("pkill -f 'Cursor' || true", { timeout: 5000 });
+        } else if (platform === "win32") {
+            execSync("taskkill /F /IM Cursor.exe /T 2>nul || exit 0", { shell: true, timeout: 5000 });
+        } else {
+            execSync("pkill -f cursor || true", { timeout: 5000 });
+        }
+    } catch { /* 忽略 */ }
+
+    // 等待进程退出
+    await new Promise(r => setTimeout(r, 1800));
+
+    // 重启
+    try {
+        if (platform === "darwin") {
+            const cursorApp = config.path_cursor_exe || "/Applications/Cursor.app";
+            if (fs.existsSync(cursorApp)) {
+                spawn("open", [cursorApp], { detached: true, stdio: "ignore" }).unref();
+            }
+        } else if (platform === "win32") {
+            if (config.path_cursor_exe && fs.existsSync(config.path_cursor_exe)) {
+                spawn(config.path_cursor_exe, [], { detached: true, stdio: "ignore" }).unref();
+            }
+        }
+    } catch (e) {
+        console.error("重启 Cursor 失败:", e.message);
+    }
+}
+
+/**
+ * 注入 patch
+ * @returns {{ success: boolean, message: string }}
+ */
+export async function applyPatch() {
+    const targetPath = getWorkbenchPath();
+    if (!targetPath) {
+        return { success: false, message: "找不到 Cursor workbench 文件路径，请确认 Cursor 已安装" };
+    }
+    if (!fs.existsSync(targetPath)) {
+        return { success: false, message: `目标文件不存在: ${targetPath}` };
+    }
+
+    let content;
+    try {
+        content = fs.readFileSync(targetPath, "utf8");
+    } catch (e) {
+        return { success: false, message: `读取文件失败: ${e.message}` };
+    }
+
+    // 幂等检查（-F fixed-string，完全不做正则解析）
+    let alreadyPatched = false;
+    try {
+        const cnt = execSync(
+            `grep -Fc '${INJECT_MARKER}' "${targetPath}" 2>/dev/null || echo 0`,
+            { encoding: "utf8", timeout: 5000 }
+        ).trim();
+        alreadyPatched = parseInt(cnt, 10) > 0;
+    } catch {
+        alreadyPatched = false;
+    }
+    if (alreadyPatched) {
+        return { success: true, message: "已经注入过了，无需重复操作" };
+    }
+
+    // 找注入点
+    const idx = content.indexOf(INJECT_BEFORE);
+    if (idx === -1) {
+        return {
+            success: false,
+            message: "找不到注入点，当前 Cursor 版本可能已更新，请联系作者适配",
+        };
+    }
+
+    // 备份（只在第一次）
+    const backupPath = targetPath + ".bak";
+    if (!fs.existsSync(backupPath)) {
+        try {
+            fs.copyFileSync(targetPath, backupPath);
+        } catch (e) {
+            return { success: false, message: `备份失败（可能需要管理员权限）: ${e.message}` };
+        }
+    }
+
+    // 注入
+    const patched = content.slice(0, idx) + INJECT_CODE + "\n" + content.slice(idx);
+    try {
+        fs.writeFileSync(targetPath, patched, "utf8");
+    } catch (e) {
+        return { success: false, message: `写入失败（可能需要管理员权限）: ${e.message}` };
+    }
+
+    return { success: true, message: "注入成功，正在重启 Cursor..." };
+}
+
+/**
+ * 还原 patch（从备份恢复）
+ * @returns {{ success: boolean, message: string }}
+ */
+export function restorePatch() {
+    const targetPath = getWorkbenchPath();
+    if (!targetPath) {
+        return { success: false, message: "找不到 Cursor workbench 文件路径" };
+    }
+
+    const backupPath = targetPath + ".bak";
+    if (!fs.existsSync(backupPath)) {
+        return { success: false, message: "找不到备份文件，可能从未注入过" };
+    }
+
+    try {
+        fs.copyFileSync(backupPath, targetPath);
+    } catch (e) {
+        return { success: false, message: `还原失败（可能需要管理员权限）: ${e.message}` };
+    }
+
+    return { success: true, message: "已还原为原始文件，正在重启 Cursor..." };
+}
