@@ -310,15 +310,35 @@ function getWorkbenchPath() {
 
 // ─────────────────────────────────────────────────────────────
 // 禁用更新弹窗 patch（直接修改 workbench.js 里的弹窗触发条件）
+// 共三处 patch，覆盖所有已知的 Cursor/VSCode 更新弹窗路径：
+//   1. npA 组件：serverConfigStore.clientVersionStatus 驱动的 Modal（启动时）
+//   2. UpdateContribution.shouldShowNotification：VSCode 原生更新通知
+//   3. cursor.checkonupdate 命令：Cursor 自己的更新弹窗（使用过程中）
 // ─────────────────────────────────────────────────────────────
-const UPDATE_POPUP_MARKER = "/*__FLY_CURSOR_NO_UPDATE_POPUP__*/";
-// 原始触发条件：updateLevel 为 RECOMMENDED 或 REQUIRED 时弹窗
+
+// patch 1 ── npA Modal（启动时弹窗，由服务端 clientVersionStatus 触发）
+const UPDATE_POPUP_MARKER   = "/*__FLY_CURSOR_NO_UPDATE_POPUP__*/";
 const UPDATE_POPUP_ORIGINAL = "(d===l_n.REQUIRED||d===l_n.RECOMMENDED)&&!e()&&(o(!0),t(!0))";
-// 替换后：永远不触发弹窗
 const UPDATE_POPUP_PATCHED  = `${UPDATE_POPUP_MARKER}(false)&&!e()&&(o(!0),t(!0))`;
 
+// patch 2 ── shouldShowNotification（VSCode 原生更新通知 toast）
+const UPDATE_NOTIFY_MARKER   = "/*__FLY_CURSOR_NO_UPDATE_NOTIFY__*/";
+const UPDATE_NOTIFY_ORIGINAL = 'shouldShowNotification(){const e=this.productService.commit,t=new Date().getTime(),i=this.storageService.get("update/lastKnownVersion",-1);return e!==i&&(this.storageService.store("update/lastKnownVersion",e,-1,1),this.storageService.store("update/updateNotificationTime",t,-1,1)),!0}';
+const UPDATE_NOTIFY_PATCHED  = `${UPDATE_NOTIFY_MARKER}shouldShowNotification(){return!1}`;
+
+// patch 3 ── cursor.checkonupdate（使用过程中的更新弹窗，含 forceUpdate / sidebar panel）
+const UPDATE_CHECKON_MARKER   = "/*__FLY_CURSOR_NO_CHECKONUPDATE__*/";
+const UPDATE_CHECKON_ORIGINAL = "async run(e,t,...i){if(Wpn.parentWindowId!==void 0)return;const r=e.get(rm),s=e.get(WY)";
+const UPDATE_CHECKON_PATCHED  = `${UPDATE_CHECKON_MARKER}async run(e,t,...i){return;const r=e.get(rm),s=e.get(WY)`;
+
+const ALL_PATCHES = [
+    { marker: UPDATE_POPUP_MARKER,   original: UPDATE_POPUP_ORIGINAL,   patched: UPDATE_POPUP_PATCHED   },
+    { marker: UPDATE_NOTIFY_MARKER,  original: UPDATE_NOTIFY_ORIGINAL,  patched: UPDATE_NOTIFY_PATCHED  },
+    { marker: UPDATE_CHECKON_MARKER, original: UPDATE_CHECKON_ORIGINAL, patched: UPDATE_CHECKON_PATCHED },
+];
+
 /**
- * 在 workbench.js 中屏蔽更新弹窗
+ * 在 workbench.js 中屏蔽所有更新弹窗
  * @returns {{ success: boolean, message?: string }}
  */
 function _patchUpdatePopup(disable) {
@@ -332,23 +352,28 @@ function _patchUpdatePopup(disable) {
         return { success: false, message: `读取失败: ${e.message}` };
     }
 
-    if (disable) {
-        // 已经 patch 过了，幂等
-        if (content.includes(UPDATE_POPUP_MARKER)) return { success: true };
-        // 找不到目标字符串（Cursor 版本更新改了代码？）
-        if (!content.includes(UPDATE_POPUP_ORIGINAL)) {
-            console.warn("[patchUpdatePopup] 找不到弹窗触发代码，可能 Cursor 已更新");
-            return { success: false, message: "找不到弹窗触发代码，Cursor 版本可能已更新" };
+    const warnings = [];
+
+    for (const { marker, original, patched } of ALL_PATCHES) {
+        if (disable) {
+            if (content.includes(marker)) continue; // 已 patch，幂等
+            if (!content.includes(original)) {
+                warnings.push(`找不到目标代码片段（Cursor 版本可能已更新）: ${marker}`);
+                continue;
+            }
+            content = content.replace(original, patched);
+        } else {
+            if (!content.includes(marker)) continue; // 未 patch，无需恢复
+            content = content.replace(patched, original);
         }
-        content = content.replace(UPDATE_POPUP_ORIGINAL, UPDATE_POPUP_PATCHED);
-    } else {
-        // 恢复
-        if (!content.includes(UPDATE_POPUP_MARKER)) return { success: true }; // 未 patch，无需恢复
-        content = content.replace(UPDATE_POPUP_PATCHED, UPDATE_POPUP_ORIGINAL);
     }
 
     try { fs.writeFileSync(targetPath, content, "utf8"); } catch (e) {
         return { success: false, message: `写入失败（可能需要管理员权限）: ${e.message}` };
+    }
+
+    if (warnings.length > 0) {
+        console.warn("[patchUpdatePopup]", warnings.join("; "));
     }
     return { success: true };
 }
