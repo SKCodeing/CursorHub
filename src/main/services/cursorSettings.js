@@ -99,7 +99,17 @@ export function setDisableUpdate(disabled) {
         results.push(`hosts: ${e.message}`);
     }
 
-    // 3. 刷新 DNS 缓存（macOS）
+    // 3. 清除 state.vscdb 里缓存的更新状态（防止弹窗复现）
+    if (disabled) {
+        try {
+            _clearUpdateStateFromDb();
+        } catch (e) {
+            // 非致命，忽略
+            console.warn("[disableUpdate] 清除更新状态失败:", e.message);
+        }
+    }
+
+    // 4. 刷新 DNS 缓存（macOS）
     if (process.platform === "darwin") {
         try {
             execSync("dscacheutil -flushcache; killall -HUP mDNSResponder 2>/dev/null || true", { timeout: 5000 });
@@ -110,11 +120,11 @@ export function setDisableUpdate(disabled) {
     return { success, message: success ? undefined : results.join("; ") };
 }
 
-// Cursor 更新相关域名列表
+// Cursor 更新相关域名列表（只屏蔽更新/下载，不影响 AI 功能）
 const CURSOR_UPDATE_HOSTS = [
     "update.cursor.sh",
     "download.cursor.sh",
-    "api2.cursor.sh",
+    "downloads.cursor.com",
 ];
 const HOSTS_MARKER = "# CursorHub: block cursor update";
 
@@ -151,10 +161,38 @@ function _patchHosts(block) {
         }
     }
 
+    // 先尝试直接写入（可能有权限）
     try {
         fs.writeFileSync(hostsPath, newContent, "utf8");
+        return;
     } catch (e) {
-        throw new Error(`写入 hosts 失败（需要管理员权限）: ${e.message}`);
+        if (e.code !== "EACCES" && e.code !== "EPERM") {
+            throw new Error(`写入 hosts 失败: ${e.message}`);
+        }
+        // 权限不足，走提权写入
+    }
+
+    // 写入临时文件，再用 sudo tee 提权写入
+    const tmpFile = path.join(os.tmpdir(), `cursohub_hosts_${Date.now()}.tmp`);
+    try {
+        fs.writeFileSync(tmpFile, newContent, "utf8");
+
+        if (process.platform === "darwin") {
+            // macOS：用 osascript 弹出系统授权框
+            const script = `do shell script "cat ${tmpFile} > /etc/hosts" with administrator privileges`;
+            execSync(`osascript -e '${script}'`, { timeout: 30000 });
+        } else if (process.platform === "win32") {
+            // Windows：用 PowerShell 提权
+            execSync(
+                `powershell -Command "Start-Process cmd -ArgumentList '/c copy /y ${tmpFile} ${hostsPath}' -Verb RunAs -Wait"`,
+                { timeout: 30000 }
+            );
+        } else {
+            // Linux：pkexec
+            execSync(`pkexec tee ${hostsPath} < ${tmpFile}`, { timeout: 30000 });
+        }
+    } finally {
+        try { fs.unlinkSync(tmpFile); } catch { /* 忽略 */ }
     }
 }
 
@@ -170,6 +208,40 @@ function _isHostsBlocked() {
         return content.includes(HOSTS_MARKER);
     } catch {
         return false;
+    }
+}
+
+/**
+ * 清除 state.vscdb 里缓存的更新状态，防止 Cursor 启动时弹出「有新版本」提示
+ */
+function _clearUpdateStateFromDb() {
+    const dbPath = path.join(
+        os.homedir(),
+        process.platform === "win32"
+            ? "AppData/Roaming/Cursor/User/globalStorage/state.vscdb"
+            : "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+    );
+    if (!fs.existsSync(dbPath)) return;
+
+    // 用 better-sqlite3 同步操作（主进程可以用）
+    try {
+        // 动态引入，避免打包问题
+        const Database = require("better-sqlite3");
+        const db = new Database(dbPath);
+        const keysToDelete = [
+            "cursor.update.ready",
+            "cursor.update.targetVersion",
+            "cursor.update.lastInstallFailed",
+            "cursor.update.promptShown",
+            "cursor.update.installationStarted",
+        ];
+        const stmt = db.prepare("DELETE FROM ItemTable WHERE key = ?");
+        for (const key of keysToDelete) {
+            stmt.run(key);
+        }
+        db.close();
+    } catch (e) {
+        console.warn("[clearUpdateState] DB 操作失败:", e.message);
     }
 }
 
