@@ -1,20 +1,31 @@
+# 依赖 & 构建产物
 node_modules
 dist
 out
+release
+build
+
+# 源码（不公开）
+src/
+scripts/
+index.html
+electron.vite.config.mjs
+electron-builder.yml
+package.json
+package-lock.json
+
+# 工具配置
 .DS_Store
 .eslintcache
+.editorconfig
+.cursorindexingignore
 *.log*
 .specstory/
-release
+CNAME
+
+# 敏感文件
+*.txt
 resources/chrome_profile_for_cursor_login
-
-src/main/*
-src/preload/*
-src/script/*
-resources/*
-
-
 src/utils/api-main.js
 src/utils/client-license.js
 src/utils/const-config.js
-
