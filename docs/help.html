@@ -433,6 +433,7 @@
 
     <div class="nav-group-title">帮助</div>
     <a class="nav-item" href="#faq"><span class="nav-dot"></span>常见问题</a>
+    <a class="nav-item" href="#about"><span class="nav-dot"></span>关于 & 检查更新</a>
     <a class="nav-item" href="#tips"><span class="nav-dot"></span>使用建议</a>
 </nav>
 
@@ -681,11 +682,11 @@
             <h2>禁用 Cursor 更新</h2>
         </div>
 
-        <p>开启后，工具会在 Cursor 的配置文件中写入 <code>update.mode=none</code>，阻止 Cursor 自动下载和安装更新，保护无感换号补丁不被覆盖。</p>
+        <p>开启后，工具会全面接管 Cursor 的更新机制，彻底屏蔽所有更新提示与弹窗，保护无感换号功能不被版本升级破坏。</p>
 
         <table>
             <tr><th>状态</th><th>说明</th></tr>
-            <tr><td><span class="tag tag-green">已开启</span></td><td>Cursor 不会自动更新，补丁安全</td></tr>
+            <tr><td><span class="tag tag-green">已开启</span></td><td>Cursor 不会自动更新，所有更新弹窗均被屏蔽，补丁安全</td></tr>
             <tr><td><span class="tag tag-gray">已关闭</span></td><td>Cursor 可自动更新，升级后需重新注入补丁</td></tr>
         </table>
 
@@ -693,7 +694,7 @@
             <span class="tip-icon">💡</span>
             <div class="tip-content">
                 <strong>建议</strong>
-                使用无感换号期间保持此开关开启。若需手动升级 Cursor，先关闭此开关，升级后再重新开启并重新注入补丁。
+                使用无感换号期间保持此开关开启。若需手动升级 Cursor，先关闭此开关，升级完成后再重新开启，并重新点击「开启无感换号」。
             </div>
         </div>
     </section>
@@ -811,10 +812,44 @@
         </ul>
     </section>
 
-    <!-- 10. FAQ -->
-    <section class="section" id="faq">
+    <!-- 10. 关于 -->
+    <section class="section" id="about">
         <div class="section-header">
             <div class="section-num">10</div>
+            <h2>关于</h2>
+        </div>
+
+        <p>「关于」页面展示应用信息，并提供以下功能：</p>
+
+        <h3>检查更新</h3>
+        <p>点击版本号旁的「检查更新」按钮，工具会自动联网获取 GitHub 上的最新版本。</p>
+        <table>
+            <tr><th>结果</th><th>说明</th></tr>
+            <tr><td><span class="tag tag-green">发现新版本</span></td><td>版本号旁展示绿色提示条，点击「前往下载」跳转到 GitHub Releases 下载最新版</td></tr>
+            <tr><td><span class="tag tag-gray">已是最新版本</span></td><td>提示「已是最新版本」，无需任何操作</td></tr>
+        </table>
+
+        <div class="tip tip-blue">
+            <span class="tip-icon">💡</span>
+            <div class="tip-content">
+                <strong>自动静默检查</strong>
+                应用启动后会在后台静默检查一次更新，若有新版本会在顶部显示一条可关闭的绿色提示条，不影响正常使用。
+            </div>
+        </div>
+
+        <h3>相关链接</h3>
+        <ul style="margin: 0 0 16px 20px; color: #6a8aa8; font-size: 14px; line-height: 2;">
+            <li><strong>使用帮助文档</strong>：即本文档，常见问题与配置说明</li>
+            <li><strong>GitHub Releases</strong>：查看更新日志，下载历史版本</li>
+            <li><strong>夸克网盘</strong>：国内镜像下载</li>
+            <li><strong>QQ 交流群</strong>：加群反馈问题、获取账号资源</li>
+        </ul>
+    </section>
+
+    <!-- 11. FAQ -->
+    <section class="section" id="faq">
+        <div class="section-header">
+            <div class="section-num">11</div>
             <h2>常见问题</h2>
         </div>
 
@@ -871,10 +906,10 @@
         </div>
     </section>
 
-    <!-- 11. 使用建议 -->
+    <!-- 12. 使用建议 -->
     <section class="section" id="tips">
         <div class="section-header">
-            <div class="section-num">11</div>
+            <div class="section-num">12</div>
             <h2>使用建议</h2>
         </div>
 
