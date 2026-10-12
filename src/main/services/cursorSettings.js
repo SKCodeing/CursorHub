@@ -109,7 +109,17 @@ export function setDisableUpdate(disabled) {
         }
     }
 
-    // 4. 刷新 DNS 缓存（macOS）
+    // 4. patch / restore workbench.js 里的弹窗触发代码（彻底屏蔽服务端下发的更新弹窗）
+    try {
+        const popupResult = _patchUpdatePopup(disabled);
+        if (!popupResult.success && popupResult.message) {
+            results.push(`popup patch: ${popupResult.message}`);
+        }
+    } catch (e) {
+        results.push(`popup patch: ${e.message}`);
+    }
+
+    // 5. 刷新 DNS 缓存（macOS）
     if (process.platform === "darwin") {
         try {
             execSync("dscacheutil -flushcache; killall -HUP mDNSResponder 2>/dev/null || true", { timeout: 5000 });
@@ -213,6 +223,10 @@ function _isHostsBlocked() {
 
 /**
  * 清除 state.vscdb 里缓存的更新状态，防止 Cursor 启动时弹出「有新版本」提示
+ *
+ * 核心原理：
+ *   Cursor 会比较 cursorupdate.lastUpdatedAndShown.version 与当前版本，
+ *   若当前版本 > 上次显示的版本就弹窗。把该值设为当前版本即可消除弹窗。
  */
 function _clearUpdateStateFromDb() {
     const dbPath = path.join(
@@ -223,11 +237,15 @@ function _clearUpdateStateFromDb() {
     );
     if (!fs.existsSync(dbPath)) return;
 
-    // 用 better-sqlite3 同步操作（主进程可以用）
+    // 读取 Cursor 当前版本
+    let cursorVersion = "999.99.99";
     try {
-        // 动态引入，避免打包问题
-        const Database = require("better-sqlite3");
-        const db = new Database(dbPath);
+        const config = getAppConfig();
+        if (config.cursorVersion) cursorVersion = config.cursorVersion;
+    } catch { /* 忽略 */ }
+
+    // 用系统 sqlite3 命令行操作（避免 ESM 环境下 require/import 打包问题）
+    try {
         const keysToDelete = [
             "cursor.update.ready",
             "cursor.update.targetVersion",
@@ -235,11 +253,28 @@ function _clearUpdateStateFromDb() {
             "cursor.update.promptShown",
             "cursor.update.installationStarted",
         ];
-        const stmt = db.prepare("DELETE FROM ItemTable WHERE key = ?");
+
+        // 删除旧的更新状态 key
         for (const key of keysToDelete) {
-            stmt.run(key);
+            try {
+                execSync(
+                    `sqlite3 "${dbPath}" "DELETE FROM ItemTable WHERE key='${key}';"`,
+                    { timeout: 5000, stdio: "pipe" }
+                );
+            } catch { /* 忽略单条失败 */ }
         }
-        db.close();
+
+        // 将 lastUpdatedAndShown.version 更新为当前版本，消除「新版本可用」弹窗
+        try {
+            execSync(
+                `sqlite3 "${dbPath}" "INSERT OR REPLACE INTO ItemTable(key,value) VALUES('cursorupdate.lastUpdatedAndShown.version','${cursorVersion}');"`,
+                { timeout: 5000, stdio: "pipe" }
+            );
+        } catch (e) {
+            console.warn("[clearUpdateState] 更新版本标记失败:", e.message);
+        }
+
+        console.log("[clearUpdateState] 已清除更新状态缓存，版本标记设为:", cursorVersion);
     } catch (e) {
         console.warn("[clearUpdateState] DB 操作失败:", e.message);
     }
@@ -271,6 +306,51 @@ function getWorkbenchPath() {
         }
     }
     return null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// 禁用更新弹窗 patch（直接修改 workbench.js 里的弹窗触发条件）
+// ─────────────────────────────────────────────────────────────
+const UPDATE_POPUP_MARKER = "/*__FLY_CURSOR_NO_UPDATE_POPUP__*/";
+// 原始触发条件：updateLevel 为 RECOMMENDED 或 REQUIRED 时弹窗
+const UPDATE_POPUP_ORIGINAL = "(d===l_n.REQUIRED||d===l_n.RECOMMENDED)&&!e()&&(o(!0),t(!0))";
+// 替换后：永远不触发弹窗
+const UPDATE_POPUP_PATCHED  = `${UPDATE_POPUP_MARKER}(false)&&!e()&&(o(!0),t(!0))`;
+
+/**
+ * 在 workbench.js 中屏蔽更新弹窗
+ * @returns {{ success: boolean, message?: string }}
+ */
+function _patchUpdatePopup(disable) {
+    const targetPath = getWorkbenchPath();
+    if (!targetPath || !fs.existsSync(targetPath)) {
+        return { success: false, message: "找不到 workbench 文件" };
+    }
+
+    let content;
+    try { content = fs.readFileSync(targetPath, "utf8"); } catch (e) {
+        return { success: false, message: `读取失败: ${e.message}` };
+    }
+
+    if (disable) {
+        // 已经 patch 过了，幂等
+        if (content.includes(UPDATE_POPUP_MARKER)) return { success: true };
+        // 找不到目标字符串（Cursor 版本更新改了代码？）
+        if (!content.includes(UPDATE_POPUP_ORIGINAL)) {
+            console.warn("[patchUpdatePopup] 找不到弹窗触发代码，可能 Cursor 已更新");
+            return { success: false, message: "找不到弹窗触发代码，Cursor 版本可能已更新" };
+        }
+        content = content.replace(UPDATE_POPUP_ORIGINAL, UPDATE_POPUP_PATCHED);
+    } else {
+        // 恢复
+        if (!content.includes(UPDATE_POPUP_MARKER)) return { success: true }; // 未 patch，无需恢复
+        content = content.replace(UPDATE_POPUP_PATCHED, UPDATE_POPUP_ORIGINAL);
+    }
+
+    try { fs.writeFileSync(targetPath, content, "utf8"); } catch (e) {
+        return { success: false, message: `写入失败（可能需要管理员权限）: ${e.message}` };
+    }
+    return { success: true };
 }
 
 const INJECT_MARKER = "/*__FLY_CURSOR_PATCH__*/";
