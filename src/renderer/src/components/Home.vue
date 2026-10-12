@@ -1003,7 +1003,7 @@
                         <div class="check-row">
                             <div>
                                 <div class="row-title">禁用 Cursor 更新</div>
-                                <div class="toggle-desc">避免升级覆盖本地补丁</div>
+                                <div class="toggle-desc">写入 update.mode=none 并屏蔽更新域名，彻底消除更新弹窗</div>
                             </div>
                             <el-switch :model-value="disableUpdateEnabled" :loading="disableUpdateLoading" @change="toggleDisableUpdate" />
                         </div>

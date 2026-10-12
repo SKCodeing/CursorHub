@@ -57,19 +57,28 @@ function writeSettingsJson(data) {
 
 /**
  * 获取「禁用 Cursor 自动更新」的当前状态
- * @returns {boolean} true = 已禁用（update.mode === "none"）
+ * @returns {boolean} true = 已禁用（settings + hosts 均已设置）
  */
 export function getDisableUpdateStatus() {
     const settings = readSettingsJson();
-    return settings["update.mode"] === "none";
+    const settingsDisabled = settings["update.mode"] === "none";
+    const hostsDisabled = _isHostsBlocked();
+    // 任一生效即视为已开启
+    return settingsDisabled || hostsDisabled;
 }
 
 /**
  * 设置「禁用 Cursor 自动更新」
- * @param {boolean} disabled  true = 禁用（写入 none），false = 恢复默认（删除该键）
+ * 同时操作：
+ *  1. Cursor settings.json → update.mode=none
+ *  2. /etc/hosts → 屏蔽 Cursor 更新检测域名（彻底消除弹窗）
+ * @param {boolean} disabled  true = 禁用，false = 恢复
  * @returns {{ success: boolean, message?: string }}
  */
 export function setDisableUpdate(disabled) {
+    const results = [];
+
+    // 1. settings.json
     try {
         const settings = readSettingsJson();
         if (disabled) {
@@ -78,9 +87,89 @@ export function setDisableUpdate(disabled) {
             delete settings["update.mode"];
         }
         const ok = writeSettingsJson(settings);
-        return { success: ok, message: ok ? undefined : "写入 settings.json 失败" };
+        if (!ok) results.push("写入 settings.json 失败");
     } catch (e) {
-        return { success: false, message: e.message };
+        results.push(`settings.json: ${e.message}`);
+    }
+
+    // 2. /etc/hosts
+    try {
+        _patchHosts(disabled);
+    } catch (e) {
+        results.push(`hosts: ${e.message}`);
+    }
+
+    // 3. 刷新 DNS 缓存（macOS）
+    if (process.platform === "darwin") {
+        try {
+            execSync("dscacheutil -flushcache; killall -HUP mDNSResponder 2>/dev/null || true", { timeout: 5000 });
+        } catch { /* 非致命 */ }
+    }
+
+    const success = results.length === 0;
+    return { success, message: success ? undefined : results.join("; ") };
+}
+
+// Cursor 更新相关域名列表
+const CURSOR_UPDATE_HOSTS = [
+    "update.cursor.sh",
+    "download.cursor.sh",
+    "api2.cursor.sh",
+];
+const HOSTS_MARKER = "# CursorHub: block cursor update";
+
+/**
+ * 修改 /etc/hosts，屏蔽或恢复 Cursor 更新域名
+ */
+function _patchHosts(block) {
+    const hostsPath = process.platform === "win32"
+        ? "C:\\Windows\\System32\\drivers\\etc\\hosts"
+        : "/etc/hosts";
+
+    let content = "";
+    try {
+        content = fs.readFileSync(hostsPath, "utf8");
+    } catch (e) {
+        throw new Error(`读取 hosts 失败: ${e.message}`);
+    }
+
+    // 先移除旧的注入块（幂等）
+    const lines = content.split("\n");
+    const cleaned = lines.filter(line => {
+        const trimmed = line.trim();
+        if (trimmed === HOSTS_MARKER) return false;
+        if (CURSOR_UPDATE_HOSTS.some(h => trimmed.includes(h) && trimmed.startsWith("127.0.0.1"))) return false;
+        return true;
+    });
+
+    let newContent = cleaned.join("\n").trimEnd() + "\n";
+
+    if (block) {
+        newContent += `\n${HOSTS_MARKER}\n`;
+        for (const host of CURSOR_UPDATE_HOSTS) {
+            newContent += `127.0.0.1 ${host}\n`;
+        }
+    }
+
+    try {
+        fs.writeFileSync(hostsPath, newContent, "utf8");
+    } catch (e) {
+        throw new Error(`写入 hosts 失败（需要管理员权限）: ${e.message}`);
+    }
+}
+
+/**
+ * 检查 hosts 中是否已屏蔽
+ */
+function _isHostsBlocked() {
+    const hostsPath = process.platform === "win32"
+        ? "C:\\Windows\\System32\\drivers\\etc\\hosts"
+        : "/etc/hosts";
+    try {
+        const content = fs.readFileSync(hostsPath, "utf8");
+        return content.includes(HOSTS_MARKER);
+    } catch {
+        return false;
     }
 }
 
