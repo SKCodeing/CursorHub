@@ -249,6 +249,43 @@ function getJwtExp(token) {
         return setDisableUpdate(disabled);
     });
 
+    // ── GitHub 版本更新检查 ───────────────────────────────────
+    ipcMain.handle("check-github-update", async () => {
+        const REPO = "SKCodeing/CursorHub";
+        const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
+        try {
+            const { net } = await import("electron");
+            const request = net.request({
+                url: API_URL,
+                method: "GET",
+            });
+            return await new Promise((resolve) => {
+                request.on("response", (response) => {
+                    let data = "";
+                    response.on("data", (chunk) => (data += chunk));
+                    response.on("end", () => {
+                        try {
+                            const json = JSON.parse(data);
+                            // tag_name 通常为 "v1.2.0"，去掉前缀 v
+                            const latestVersion = (json.tag_name || "").replace(/^v/, "");
+                            const releaseUrl = json.html_url || `https://github.com/${REPO}/releases/latest`;
+                            const body = json.body || "";
+                            resolve({ success: true, latestVersion, releaseUrl, body });
+                        } catch (e) {
+                            resolve({ success: false, message: "解析响应失败" });
+                        }
+                    });
+                });
+                request.on("error", (e) => {
+                    resolve({ success: false, message: e.message || "网络请求失败" });
+                });
+                request.end();
+            });
+        } catch (e) {
+            return { success: false, message: e.message };
+        }
+    });
+
     // ── 外部链接 ──────────────────────────────────────────────
     ipcMain.handle("open-external-link", (_, url) => {
         if (url && (url.startsWith("https://") || url.startsWith("http://"))) {

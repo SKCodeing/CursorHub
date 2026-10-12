@@ -9,11 +9,13 @@
         Coffee,
         InfoFilled,
         Close,
+        Refresh,
     } from "@element-plus/icons-vue";
     import appIcon from "../assets/image/icon.png";
     import alipayQR from "../assets/donate/alipay.png";
     import wechatQR from "../assets/donate/wechat.png";
     import qqGroupQR from "../assets/donate/qq-group.jpg";
+    import { ElMessage } from "element-plus";
 
     const CURRENT_YEAR = new Date().getFullYear();
 
@@ -21,6 +23,7 @@
         quark: "https://pan.quark.cn/s/47124c66291d",
         baidu: "https://pan.baidu.com/s/1UPg4D4VO_F_47Fl1A7oc8g?pwd=9gmc",
         qqGroup: "https://qun.qq.com/universal-share/share?ac=1&authKey=ZpKpMm4QdN1I2eWzqZYinybEpN1PfyrUlmgA01ZG0mAVSUVg0fWQWngzBnl7jG79&busi_data=eyJncm91cENvZGUiOiIxMDAyMzg4NTM3IiwidG9rZW4iOiJNR0hENmlHS0xHSzdmMm0xRmZSNjJpczdJMWl5WkhrNWI0SHVQOUZhemNuSTcvN0VQNUNSZVZ4Ty9kbU1KSFBWIiwidWluIjoiMzY2Mzg1NjQyOSJ9&data=ghmRHANkTOdaEFfbxNKWtfgZ5emKN2-RQ-FKgFvWnukdfbup51jtrgQKlbPS_2O-0QHYmuRUd7her7DzYjH43A&svctype=4&tempid=h5_group_info",
+        github: "https://github.com/SKCodeing/CursorHub/releases/latest",
     };
 
     const appStore = useAppStore();
@@ -43,6 +46,50 @@
 
     const openLink = (url) => {
         if (url) window.api.openExternalLink(url);
+    };
+
+    // ── 检查更新 ─────────────────────────────────────────────
+    const checkingUpdate = ref(false);
+    const updateInfo = ref(null); // null | { hasUpdate, latestVersion, releaseUrl, body }
+
+    /**
+     * 比较语义化版本号，返回 true 表示 remote > local
+     */
+    function isNewerVersion(remote, local) {
+        const parse = (v) => String(v).replace(/^v/, "").split(".").map(Number);
+        const [rMajor, rMinor, rPatch] = parse(remote);
+        const [lMajor, lMinor, lPatch] = parse(local);
+        if (rMajor !== lMajor) return rMajor > lMajor;
+        if (rMinor !== lMinor) return rMinor > lMinor;
+        return rPatch > lPatch;
+    }
+
+    const checkUpdate = async (silent = false) => {
+        if (checkingUpdate.value) return;
+        checkingUpdate.value = true;
+        updateInfo.value = null;
+        try {
+            const result = await window.api.checkGithubUpdate();
+            if (!result.success) {
+                if (!silent) ElMessage.error(result.message || "检查更新失败，请稍后重试");
+                return;
+            }
+            const current = versionText.value;
+            const hasUpdate = isNewerVersion(result.latestVersion, current);
+            updateInfo.value = {
+                hasUpdate,
+                latestVersion: result.latestVersion,
+                releaseUrl: result.releaseUrl,
+                body: result.body,
+            };
+            if (!hasUpdate && !silent) {
+                ElMessage.success("已是最新版本");
+            }
+        } catch (e) {
+            if (!silent) ElMessage.error("检查更新失败");
+        } finally {
+            checkingUpdate.value = false;
+        }
     };
 
     // 内嵌帮助文档：读取本地 HTML 内容，用 srcdoc 注入 iframe（绕过 CSP blob 限制）
@@ -76,12 +123,34 @@
                             <div class="intro-title-row">
                                 <h1 class="app-name">{{ appName }}</h1>
                                 <el-tag size="small" effect="plain" class="ver-tag">v{{ versionText || "—" }}</el-tag>
+                                <el-button
+                                    size="small"
+                                    :loading="checkingUpdate"
+                                    :icon="Refresh"
+                                    text
+                                    class="check-update-btn"
+                                    @click="checkUpdate(false)"
+                                >检查更新</el-button>
                             </div>
                             <p class="app-desc">
                                 Cursor 账号管理助手：本地账号库、无感换号与环境维护，让切换账号更省事。
                             </p>
                             <div class="tech-chips">
                                 <span v-for="item in techStack" :key="item.label" class="tech-chip">{{ item.label }}</span>
+                            </div>
+
+                            <!-- 有新版本时展示提示条 -->
+                            <div v-if="updateInfo?.hasUpdate" class="update-banner">
+                                <div class="update-banner-left">
+                                    <span class="update-badge">NEW</span>
+                                    <span class="update-text">发现新版本 <strong>v{{ updateInfo.latestVersion }}</strong></span>
+                                </div>
+                                <el-button
+                                    size="small"
+                                    type="primary"
+                                    class="update-go-btn"
+                                    @click="openLink(updateInfo.releaseUrl)"
+                                >前往下载</el-button>
                             </div>
                         </div>
                     </div>
@@ -116,6 +185,13 @@
                             <div class="link-text">
                                 <div class="link-label">使用帮助文档</div>
                                 <div class="link-desc">常见问题与配置说明</div>
+                            </div>
+                        </button>
+                        <button type="button" class="link-row" @click="openLink(LINKS.github)">
+                            <div class="link-icon gh-tone"><el-icon :size="15"><Link /></el-icon></div>
+                            <div class="link-text">
+                                <div class="link-label">GitHub Releases</div>
+                                <div class="link-desc">查看更新日志 · 下载最新版本</div>
                             </div>
                         </button>
                         <!-- 在线文档 / GitHub Release 暂时隐藏 -->
@@ -283,6 +359,52 @@
 
     .ver-tag {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .check-update-btn {
+        font-size: 12px;
+        color: var(--muted-foreground);
+        padding: 0 4px;
+        height: 22px;
+        &:hover { color: var(--primary); }
+    }
+
+    .update-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 10px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px solid rgb(34 197 94 / 0.35);
+        background: rgb(34 197 94 / 0.07);
+    }
+
+    .update-banner-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .update-badge {
+        font-size: 10px;
+        font-weight: 700;
+        color: #fff;
+        background: #22c55e;
+        border-radius: 4px;
+        padding: 1px 5px;
+        letter-spacing: 0.05em;
+    }
+
+    .update-text {
+        font-size: 13px;
+        color: var(--foreground);
+        strong { color: #22c55e; }
+    }
+
+    .update-go-btn {
+        flex-shrink: 0;
     }
 
     .app-desc {

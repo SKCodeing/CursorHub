@@ -67,6 +67,9 @@ contextBridge.exposeInMainWorld("api", {
     getDisableUpdateStatus: () => ipcRenderer.invoke("get-disable-update-status"),
     setDisableUpdate: (disabled) => ipcRenderer.invoke("set-disable-update", disabled),
 
+    // ── GitHub 版本更新检查 ───────────────────────────────────
+    checkGithubUpdate: () => ipcRenderer.invoke("check-github-update"),
+
     // ── 外部链接 ──────────────────────────────────────────────
     openExternalLink: (url) => ipcRenderer.invoke("open-external-link", url),
 

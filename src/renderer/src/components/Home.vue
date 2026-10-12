@@ -182,6 +182,8 @@
         loadAutoSwitchStats();
         loadPatchStatus();
         loadDisableUpdateStatus();
+        // 延迟静默检查更新，不阻塞启动
+        setTimeout(silentCheckUpdate, 3000);
         unsubAutoSwitch = window.api.onAutoSwitchEvent(({ channel, data }) => {
             if (channel === "auto-switched") {
                 autoSwitchStats.value.currentEmail = data.email;
@@ -796,10 +798,59 @@
         }
     };
 
+    // ── GitHub 版本更新（静默检查） ───────────────────────────
+    const newVersionInfo = ref(null); // null | { latestVersion, releaseUrl }
+    const updateBannerDismissed = ref(false);
+
+    function isNewerVersion(remote, local) {
+        const parse = (v) => String(v).replace(/^v/, "").split(".").map(Number);
+        const [rMajor, rMinor, rPatch] = parse(remote);
+        const [lMajor, lMinor, lPatch] = parse(local);
+        if (rMajor !== lMajor) return rMajor > lMajor;
+        if (rMinor !== lMinor) return rMinor > lMinor;
+        return rPatch > lPatch;
+    }
+
+    const silentCheckUpdate = async () => {
+        try {
+            const result = await window.api.checkGithubUpdate();
+            if (!result.success) return;
+            const current = appConfig.value?.version || "0.0.0";
+            if (isNewerVersion(result.latestVersion, current)) {
+                newVersionInfo.value = {
+                    latestVersion: result.latestVersion,
+                    releaseUrl: result.releaseUrl,
+                };
+            }
+        } catch { /* 静默失败，不影响主流程 */ }
+    };
+
 </script>
 
 <template>
     <div v-loading="isInitLoading" class="page-root">
+        <!-- 新版本提示 banner -->
+        <transition name="banner-slide">
+            <div
+                v-if="newVersionInfo && !updateBannerDismissed"
+                class="update-global-banner"
+            >
+                <span class="update-global-badge">NEW</span>
+                <span class="update-global-text">
+                    发现新版本 <strong>v{{ newVersionInfo.latestVersion }}</strong>，建议更新以获得最佳体验
+                </span>
+                <div class="update-global-actions">
+                    <el-button
+                        size="small"
+                        type="primary"
+                        class="banner-dl-btn"
+                        @click="() => window.api.openExternalLink(newVersionInfo.releaseUrl)"
+                    >前往下载</el-button>
+                    <button class="banner-close-btn" @click="updateBannerDismissed = true">✕</button>
+                </div>
+            </div>
+        </transition>
+
         <!-- 首页 -->
         <div v-show="activeNav === 'home'" class="page-view home-view">
             <header class="page-header">
@@ -1087,6 +1138,76 @@
         display: flex;
         flex-direction: column;
         color: var(--foreground);
+    }
+
+    // ── 版本更新全局 banner ────────────────────────────────────
+    .update-global-banner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 16px;
+        background: linear-gradient(90deg, rgb(34 197 94 / 0.12), rgb(16 185 129 / 0.08));
+        border-bottom: 1px solid rgb(34 197 94 / 0.25);
+        flex-shrink: 0;
+        flex-wrap: wrap;
+    }
+
+    .update-global-badge {
+        font-size: 10px;
+        font-weight: 700;
+        color: #fff;
+        background: #22c55e;
+        border-radius: 4px;
+        padding: 1px 6px;
+        letter-spacing: 0.05em;
+        flex-shrink: 0;
+    }
+
+    .update-global-text {
+        flex: 1;
+        font-size: 13px;
+        color: var(--foreground);
+        strong { color: #16a34a; }
+    }
+
+    .update-global-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .banner-close-btn {
+        width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted-foreground);
+        font-size: 11px;
+        cursor: pointer;
+        line-height: 1;
+        padding: 0;
+        &:hover { color: var(--foreground); background: rgb(var(--surface-contrast-rgb) / 0.4); }
+    }
+
+    .banner-slide-enter-active,
+    .banner-slide-leave-active {
+        transition: max-height 0.25s ease, opacity 0.25s ease;
+        overflow: hidden;
+    }
+    .banner-slide-enter-from,
+    .banner-slide-leave-to {
+        max-height: 0;
+        opacity: 0;
+    }
+    .banner-slide-enter-to,
+    .banner-slide-leave-from {
+        max-height: 60px;
+        opacity: 1;
     }
 
     .page-view {
