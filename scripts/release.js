@@ -63,7 +63,6 @@ console.log("\n🔨 开始编译打包...");
 const buildResult = spawnSync("npm", ["run", "build:mac"], {
     cwd: ROOT,
     stdio: "inherit",
-    shell: true,
 });
 if (buildResult.status !== 0) {
     console.error("❌ 打包失败，终止发布");
@@ -94,6 +93,7 @@ try {
 
 // ── 发布 GitHub Release ───────────────────────────────────────
 console.log(`\n🚀 发布 GitHub Release v${newVersion}...`);
+
 const releaseNotes = `## CursorHub v${newVersion}
 
 ### 下载
@@ -101,21 +101,38 @@ const releaseNotes = `## CursorHub v${newVersion}
 
 ### 安装说明
 1. 下载 DMG，双击打开，将 CursorHub.app 拖入 Applications
-2. 首次打开需**右键 → 打开**（绕过 macOS Gatekeeper）
-   或终端执行：\`xattr -cr /Applications/CursorHub.app\`
+2. 首次打开需右键打开（绕过 macOS Gatekeeper）
+   或终端执行：xattr -cr /Applications/CursorHub.app
 
 ### 联系
-- QQ 交流群：569846057 | QQ：807600577`;
+- QQ 交流群：569846057
+- QQ：807600577`;
+
+// 写入临时文件避免 --notes 多行参数解析问题
+const tmpNotes = path.join(ROOT, "dist", `.release-notes-${newVersion}.md`);
+fs.writeFileSync(tmpNotes, releaseNotes, "utf8");
+
+// 只上传新版本的 DMG
+const newDmgFiles = dmgFiles.filter(f => path.basename(f).includes(newVersion));
+if (newDmgFiles.length === 0) {
+    console.error("❌ 未找到新版本 DMG 文件");
+    fs.unlinkSync(tmpNotes);
+    process.exit(1);
+}
 
 const ghArgs = [
     "release", "create", `v${newVersion}`,
-    ...dmgFiles,
+    ...newDmgFiles,
     "--repo", "SKCodeing/CursorHub",
     "--title", `CursorHub v${newVersion}`,
-    "--notes", releaseNotes,
+    "-F", tmpNotes,
 ];
 
-const ghResult = spawnSync("gh", ghArgs, { cwd: ROOT, stdio: "inherit", shell: true });
+const ghResult = spawnSync("gh", ghArgs, { cwd: ROOT, stdio: "inherit" });
+
+// 清理临时文件
+try { fs.unlinkSync(tmpNotes); } catch { /* 忽略 */ }
+
 if (ghResult.status !== 0) {
     console.error("❌ GitHub Release 发布失败");
     process.exit(1);
