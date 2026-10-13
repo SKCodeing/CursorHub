@@ -805,7 +805,10 @@
         }
     };
 
-    // ── GitHub 版本更新（静默检查） ───────────────────────────
+    const handleDisclaimerAgree = async () => {
+        await window.api.setDisclaimerAgreed();
+        disclaimerVisible.value = false;
+    };
     const newVersionInfo = ref(null); // null | { latestVersion, releaseUrl }
     const updateBannerDismissed = ref(false);
 
@@ -1160,7 +1163,7 @@
             </div>
             <template #footer>
                 <div class="disclaimer-footer">
-                    <el-button type="primary" @click="async () => { await window.api.setDisclaimerAgreed(); disclaimerVisible = false; }">
+                    <el-button type="primary" @click="handleDisclaimerAgree">
                         我已阅读并同意
                     </el-button>
                     <el-button @click="window.api.closeWindow()">不同意，退出</el-button>
