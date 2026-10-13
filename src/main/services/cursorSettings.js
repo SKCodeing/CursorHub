@@ -222,11 +222,8 @@ function _isHostsBlocked() {
 }
 
 /**
- * 清除 state.vscdb 里缓存的更新状态，防止 Cursor 启动时弹出「有新版本」提示
- *
- * 核心原理：
- *   Cursor 会比较 cursorupdate.lastUpdatedAndShown.version 与当前版本，
- *   若当前版本 > 上次显示的版本就弹窗。把该值设为当前版本即可消除弹窗。
+ * 清除 state.vscdb 里缓存的更新状态
+ * ⚠️ 只在 Cursor 未运行时操作，避免数据库损坏
  */
 function _clearUpdateStateFromDb() {
     const dbPath = path.join(
@@ -237,14 +234,26 @@ function _clearUpdateStateFromDb() {
     );
     if (!fs.existsSync(dbPath)) return;
 
-    // 读取 Cursor 当前版本
+    // 安全检查：Cursor 正在运行时跳过，防止损坏数据库
+    try {
+        const checkCmd = process.platform === "win32"
+            ? `tasklist /FI "IMAGENAME eq Cursor.exe" 2>nul | find /I "Cursor.exe"`
+            : `pgrep -x "Cursor" || pgrep -f "Cursor.app/Contents/MacOS/Cursor"`;
+        const result = execSync(checkCmd, { timeout: 3000, stdio: "pipe" }).toString().trim();
+        if (result) {
+            console.log("[clearUpdateState] Cursor 正在运行，跳过数据库操作");
+            return;
+        }
+    } catch {
+        // pgrep 找不到进程时返回非 0，即未运行，继续执行
+    }
+
     let cursorVersion = "999.99.99";
     try {
         const config = getAppConfig();
         if (config.cursorVersion) cursorVersion = config.cursorVersion;
     } catch { /* 忽略 */ }
 
-    // 用系统 sqlite3 命令行操作（避免 ESM 环境下 require/import 打包问题）
     try {
         const keysToDelete = [
             "cursor.update.ready",
@@ -253,18 +262,12 @@ function _clearUpdateStateFromDb() {
             "cursor.update.promptShown",
             "cursor.update.installationStarted",
         ];
-
-        // 删除旧的更新状态 key
         for (const key of keysToDelete) {
             try {
-                execSync(
-                    `sqlite3 "${dbPath}" "DELETE FROM ItemTable WHERE key='${key}';"`,
-                    { timeout: 5000, stdio: "pipe" }
-                );
+                execSync(`sqlite3 "${dbPath}" "DELETE FROM ItemTable WHERE key='${key}';"`,
+                    { timeout: 5000, stdio: "pipe" });
             } catch { /* 忽略单条失败 */ }
         }
-
-        // 将 lastUpdatedAndShown.version 更新为当前版本，消除「新版本可用」弹窗
         try {
             execSync(
                 `sqlite3 "${dbPath}" "INSERT OR REPLACE INTO ItemTable(key,value) VALUES('cursorupdate.lastUpdatedAndShown.version','${cursorVersion}');"`,
@@ -273,8 +276,7 @@ function _clearUpdateStateFromDb() {
         } catch (e) {
             console.warn("[clearUpdateState] 更新版本标记失败:", e.message);
         }
-
-        console.log("[clearUpdateState] 已清除更新状态缓存，版本标记设为:", cursorVersion);
+        console.log("[clearUpdateState] 已清除更新状态缓存，版本标记:", cursorVersion);
     } catch (e) {
         console.warn("[clearUpdateState] DB 操作失败:", e.message);
     }
