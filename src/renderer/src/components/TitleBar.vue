@@ -1,14 +1,7 @@
 <template>
     <div class="title-bar" @dblclick="handleDoubleClick">
         <div class="title-bar-container">
-            <!-- macOS：红黄绿按钮在左侧 -->
-            <div class="title-bar-left">
-                <div v-if="platform === 'darwin'" class="window-controls mac-controls">
-                    <div class="mac-btn mac-close" @click.stop="closeWindow" title="关闭"></div>
-                    <div class="mac-btn mac-minimize" @click.stop="minimizeWindow" title="最小化"></div>
-                    <div class="mac-btn mac-maximize" @click.stop="maximizeWindow" title="最大化"></div>
-                </div>
-            </div>
+            <div class="title-bar-left"></div>
             <div class="title-bar-right">
                 <!-- Windows/Linux：按钮在右侧 -->
                 <div v-if="platform !== 'darwin'" class="window-controls">
