@@ -348,6 +348,11 @@ const UPDATE_NOTIFY_AVAIL_MARKER   = "/*__FLY_CURSOR_NO_NOTIFY_AVAILABLE__*/";
 const UPDATE_NOTIFY_AVAIL_ORIGINAL = "onUpdateAvailable(e){if(!this.shouldShowNotification())return;const t=e.productVersion;t&&this.notificationService.prompt(Id.Info,F(12643,null),";
 const UPDATE_NOTIFY_AVAIL_PATCHED  = `onUpdateAvailable(e){if(!this.shouldShowNotification())return;${UPDATE_NOTIFY_AVAIL_MARKER}return;const t=e.productVersion;t&&this.notificationService.prompt(Id.Info,F(12643,null),`;
 
+// patch 7 ── setShowing（updateNotificationService 的核心开关，彻底阻断所有弹窗路径）
+const UPDATE_SET_SHOWING_MARKER   = "/*__FLY_CURSOR_NO_SET_SHOWING__*/";
+const UPDATE_SET_SHOWING_ORIGINAL = "setShowing(e){this.showing.value!==e&&this.showing.change(e)}";
+const UPDATE_SET_SHOWING_PATCHED  = `setShowing(e){if(e){return;}/*${UPDATE_SET_SHOWING_MARKER}*/this.showing.value!==e&&this.showing.change(e)}`;
+
 const ALL_PATCHES = [
     { marker: UPDATE_POPUP_MARKER,         original: UPDATE_POPUP_ORIGINAL,         patched: UPDATE_POPUP_PATCHED         },
     { marker: UPDATE_NOTIFY_MARKER,        original: UPDATE_NOTIFY_ORIGINAL,        patched: UPDATE_NOTIFY_PATCHED        },
@@ -355,6 +360,7 @@ const ALL_PATCHES = [
     { marker: UPDATE_SIDEBAR_MARKER,       original: UPDATE_SIDEBAR_ORIGINAL,       patched: UPDATE_SIDEBAR_PATCHED       },
     { marker: UPDATE_STATE_MARKER,         original: UPDATE_STATE_ORIGINAL,         patched: UPDATE_STATE_PATCHED         },
     { marker: UPDATE_NOTIFY_AVAIL_MARKER,  original: UPDATE_NOTIFY_AVAIL_ORIGINAL,  patched: UPDATE_NOTIFY_AVAIL_PATCHED  },
+    { marker: UPDATE_SET_SHOWING_MARKER,   original: UPDATE_SET_SHOWING_ORIGINAL,   patched: UPDATE_SET_SHOWING_PATCHED   },
 ];
 
 /**
