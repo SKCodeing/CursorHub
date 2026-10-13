@@ -343,12 +343,18 @@ const UPDATE_STATE_MARKER   = "/*__FLY_CURSOR_NO_UPDATE_STATE__*/";
 const UPDATE_STATE_ORIGINAL = "async onUpdateStateChange(e){switch(this.updateStateContextKey.set(e.type),e.type){";
 const UPDATE_STATE_PATCHED  = `async onUpdateStateChange(e){this.updateStateContextKey.set(e.type);${UPDATE_STATE_MARKER}if(!1)switch(e.type){`;
 
+// patch 6 ── onUpdateAvailable 提前 return（彻底阻止 notification prompt）
+const UPDATE_NOTIFY_AVAIL_MARKER   = "/*__FLY_CURSOR_NO_NOTIFY_AVAILABLE__*/";
+const UPDATE_NOTIFY_AVAIL_ORIGINAL = "onUpdateAvailable(e){if(!this.shouldShowNotification())return;const t=e.productVersion;t&&this.notificationService.prompt(Id.Info,F(12643,null),";
+const UPDATE_NOTIFY_AVAIL_PATCHED  = `onUpdateAvailable(e){if(!this.shouldShowNotification())return;${UPDATE_NOTIFY_AVAIL_MARKER}return;const t=e.productVersion;t&&this.notificationService.prompt(Id.Info,F(12643,null),`;
+
 const ALL_PATCHES = [
-    { marker: UPDATE_POPUP_MARKER,   original: UPDATE_POPUP_ORIGINAL,   patched: UPDATE_POPUP_PATCHED   },
-    { marker: UPDATE_NOTIFY_MARKER,  original: UPDATE_NOTIFY_ORIGINAL,  patched: UPDATE_NOTIFY_PATCHED  },
-    { marker: UPDATE_CHECKON_MARKER, original: UPDATE_CHECKON_ORIGINAL, patched: UPDATE_CHECKON_PATCHED },
-    { marker: UPDATE_SIDEBAR_MARKER, original: UPDATE_SIDEBAR_ORIGINAL, patched: UPDATE_SIDEBAR_PATCHED },
-    { marker: UPDATE_STATE_MARKER,   original: UPDATE_STATE_ORIGINAL,   patched: UPDATE_STATE_PATCHED   },
+    { marker: UPDATE_POPUP_MARKER,         original: UPDATE_POPUP_ORIGINAL,         patched: UPDATE_POPUP_PATCHED         },
+    { marker: UPDATE_NOTIFY_MARKER,        original: UPDATE_NOTIFY_ORIGINAL,        patched: UPDATE_NOTIFY_PATCHED        },
+    { marker: UPDATE_CHECKON_MARKER,       original: UPDATE_CHECKON_ORIGINAL,       patched: UPDATE_CHECKON_PATCHED       },
+    { marker: UPDATE_SIDEBAR_MARKER,       original: UPDATE_SIDEBAR_ORIGINAL,       patched: UPDATE_SIDEBAR_PATCHED       },
+    { marker: UPDATE_STATE_MARKER,         original: UPDATE_STATE_ORIGINAL,         patched: UPDATE_STATE_PATCHED         },
+    { marker: UPDATE_NOTIFY_AVAIL_MARKER,  original: UPDATE_NOTIFY_AVAIL_ORIGINAL,  patched: UPDATE_NOTIFY_AVAIL_PATCHED  },
 ];
 
 /**
