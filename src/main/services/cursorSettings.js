@@ -312,10 +312,7 @@ function getWorkbenchPath() {
 
 // ─────────────────────────────────────────────────────────────
 // 禁用更新弹窗 patch（直接修改 workbench.js 里的弹窗触发条件）
-// 共三处 patch，覆盖所有已知的 Cursor/VSCode 更新弹窗路径：
-//   1. npA 组件：serverConfigStore.clientVersionStatus 驱动的 Modal（启动时）
-//   2. UpdateContribution.shouldShowNotification：VSCode 原生更新通知
-//   3. cursor.checkonupdate 命令：Cursor 自己的更新弹窗（使用过程中）
+// 共多处 patch，覆盖所有已知的 Cursor/VSCode 更新弹窗路径
 // ─────────────────────────────────────────────────────────────
 
 // patch 1 ── npA Modal（启动时弹窗，由服务端 clientVersionStatus 触发）
@@ -333,23 +330,13 @@ const UPDATE_CHECKON_MARKER   = "/*__FLY_CURSOR_NO_CHECKONUPDATE__*/";
 const UPDATE_CHECKON_ORIGINAL = "async run(e,t,...i){if(Wpn.parentWindowId!==void 0)return;const r=e.get(rm),s=e.get(WY)";
 const UPDATE_CHECKON_PATCHED  = `${UPDATE_CHECKON_MARKER}async run(e,t,...i){return;const r=e.get(rm),s=e.get(WY)`;
 
-// patch 4 ── 侧边栏更新提示面板（AI 对话框上方的内嵌更新弹窗）
+// patch 4 ── 侧边栏更新提示面板（pbx 组件外层 when 条件）
 const UPDATE_SIDEBAR_MARKER   = "/*__FLY_CURSOR_NO_SIDEBAR_UPDATE__*/";
 const UPDATE_SIDEBAR_ORIGINAL = "return he(Nt,{get when(){return a()||b()},get children(){var L=abx()";
 const UPDATE_SIDEBAR_PATCHED  = `return he(Nt,{get when(){return ${UPDATE_SIDEBAR_MARKER}!1},get children(){var L=abx()`;
 
-// patch 5 ── onUpdateStateChange（阻止所有 VSCode 更新状态通知）
-const UPDATE_STATE_MARKER   = "/*__FLY_CURSOR_NO_UPDATE_STATE__*/";
-const UPDATE_STATE_ORIGINAL = "async onUpdateStateChange(e){switch(this.updateStateContextKey.set(e.type),e.type){";
-const UPDATE_STATE_PATCHED  = `async onUpdateStateChange(e){this.updateStateContextKey.set(e.type);${UPDATE_STATE_MARKER}if(!1)switch(e.type){`;
-
-// patch 6 ── onUpdateAvailable 提前 return（彻底阻止 notification prompt）
-const UPDATE_NOTIFY_AVAIL_MARKER   = "/*__FLY_CURSOR_NO_NOTIFY_AVAILABLE__*/";
-const UPDATE_NOTIFY_AVAIL_ORIGINAL = "onUpdateAvailable(e){if(!this.shouldShowNotification())return;const t=e.productVersion;t&&this.notificationService.prompt(Id.Info,F(12643,null),";
-const UPDATE_NOTIFY_AVAIL_PATCHED  = `onUpdateAvailable(e){if(!this.shouldShowNotification())return;${UPDATE_NOTIFY_AVAIL_MARKER}return;const t=e.productVersion;t&&this.notificationService.prompt(Id.Info,F(12643,null),`;
-
-// patch 5 ── CSS 注入：隐藏所有更新弹窗 UI（兜底方案，覆盖所有未知路径）
-// composer-warning-popup 是弹窗的真实 class（通过 DevTools 确认）
+// patch 5 ── CSS 注入：隐藏所有更新弹窗 UI
+// composer-warning-popup 是 Composer 面板底部更新弹窗的真实 class（通过 DevTools 确认）
 const UPDATE_CSS_MARKER  = "/*__FLY_CURSOR_HIDE_UPDATE_CSS__*/";
 const UPDATE_CSS_PATCHED = `
 ${UPDATE_CSS_MARKER}
@@ -368,25 +355,11 @@ ${UPDATE_CSS_MARKER}
   } catch(e) {}
 })();`;
 
-// patch 6 ── ubx 内联样式：隐藏 pbx 弹窗容器（display:flex -> none）
-const UPDATE_UBX_MARKER   = "/*__FLY_CURSOR_HIDE_UBX__*/";
-const UPDATE_UBX_ORIGINAL = 'ubx={width:"340px","background-color":"var(--vscode-editorWidget-background)","backdrop-filter":"blur(40px)","box-shadow":"0 4px 8px var(--vscode-inlineChat-shadow)",padding:"8px","padding-top":"6px","border-color":"var(--vscode-notifications-border)","border-radius":"7px","box-sizing":"border-box","border-width":"1px","border-style":"solid",display:"flex","flex-direction":"column",opacity:"1"';
-const UPDATE_UBX_PATCHED  = `${UPDATE_UBX_MARKER}${UPDATE_UBX_ORIGINAL.replace('display:"flex"', 'display:"none"')}`;
-
-// patch 8 ── vscode:showTranslatedBuildWarning 事件（真正触发弹窗的来源！）
-// 服务端通过 IPC 推送此事件，绕过所有其他 patch，直接调用 notificationService.prompt
-const UPDATE_BUILD_WARN_MARKER   = "/*__FLY_NO_BUILD_WARN__*/";
-const UPDATE_BUILD_WARN_ORIGINAL = 'sk.on("vscode:showTranslatedBuildWarning",()=>{this.notificationService.prompt(Ko.Warning,F(13548,null,this.productService.nameLong),[{label:F(13549,null),run:()=>{this.openerService.open("https://cursor.com/downloads")}}],{priority:GB.URGENT})})';
-const UPDATE_BUILD_WARN_PATCHED  = `sk.on("vscode:showTranslatedBuildWarning",()=>{${UPDATE_BUILD_WARN_MARKER}})`;
-
 const ALL_PATCHES = [
-    { marker: UPDATE_POPUP_MARKER,          original: UPDATE_POPUP_ORIGINAL,          patched: UPDATE_POPUP_PATCHED          },
-    { marker: UPDATE_NOTIFY_MARKER,         original: UPDATE_NOTIFY_ORIGINAL,         patched: UPDATE_NOTIFY_PATCHED         },
-    { marker: UPDATE_CHECKON_MARKER,        original: UPDATE_CHECKON_ORIGINAL,        patched: UPDATE_CHECKON_PATCHED        },
-    { marker: UPDATE_SIDEBAR_MARKER,        original: UPDATE_SIDEBAR_ORIGINAL,        patched: UPDATE_SIDEBAR_PATCHED        },
-    { marker: UPDATE_UBX_MARKER,            original: UPDATE_UBX_ORIGINAL,            patched: UPDATE_UBX_PATCHED            },
-    { marker: UPDATE_TOAST_MARKER,          original: UPDATE_TOAST_ORIGINAL,          patched: UPDATE_TOAST_PATCHED          },
-    { marker: UPDATE_BUILD_WARN_MARKER,     original: UPDATE_BUILD_WARN_ORIGINAL,     patched: UPDATE_BUILD_WARN_PATCHED     },
+    { marker: UPDATE_POPUP_MARKER,    original: UPDATE_POPUP_ORIGINAL,    patched: UPDATE_POPUP_PATCHED    },
+    { marker: UPDATE_NOTIFY_MARKER,   original: UPDATE_NOTIFY_ORIGINAL,   patched: UPDATE_NOTIFY_PATCHED   },
+    { marker: UPDATE_CHECKON_MARKER,  original: UPDATE_CHECKON_ORIGINAL,  patched: UPDATE_CHECKON_PATCHED  },
+    { marker: UPDATE_SIDEBAR_MARKER,  original: UPDATE_SIDEBAR_ORIGINAL,  patched: UPDATE_SIDEBAR_PATCHED  },
 ];
 
 /**
