@@ -371,12 +371,18 @@ const UPDATE_UBX_MARKER   = "/*__FLY_CURSOR_HIDE_UBX__*/";
 const UPDATE_UBX_ORIGINAL = 'ubx={width:"340px","background-color":"var(--vscode-editorWidget-background)","backdrop-filter":"blur(40px)","box-shadow":"0 4px 8px var(--vscode-inlineChat-shadow)",padding:"8px","padding-top":"6px","border-color":"var(--vscode-notifications-border)","border-radius":"7px","box-sizing":"border-box","border-width":"1px","border-style":"solid",display:"flex","flex-direction":"column",opacity:"1"';
 const UPDATE_UBX_PATCHED  = `${UPDATE_UBX_MARKER}${UPDATE_UBX_ORIGINAL.replace('display:"flex"', 'display:"none"')}`;
 
+// patch 7 ── notification-toast 创建时隐藏（VSCode 原生 toast，在 DOM 创建时设 display:none）
+const UPDATE_TOAST_MARKER   = "/*__FLY_NO_TOAST__*/";
+const UPDATE_TOAST_ORIGINAL = 'const o=Rn(".notification-toast");r.appendChild(o);';
+const UPDATE_TOAST_PATCHED  = `const o=Rn(".notification-toast");${UPDATE_TOAST_MARKER}o.style.display="none";r.appendChild(o);`;
+
 const ALL_PATCHES = [
     { marker: UPDATE_POPUP_MARKER,   original: UPDATE_POPUP_ORIGINAL,   patched: UPDATE_POPUP_PATCHED   },
     { marker: UPDATE_NOTIFY_MARKER,  original: UPDATE_NOTIFY_ORIGINAL,  patched: UPDATE_NOTIFY_PATCHED  },
     { marker: UPDATE_CHECKON_MARKER, original: UPDATE_CHECKON_ORIGINAL, patched: UPDATE_CHECKON_PATCHED },
     { marker: UPDATE_SIDEBAR_MARKER, original: UPDATE_SIDEBAR_ORIGINAL, patched: UPDATE_SIDEBAR_PATCHED },
     { marker: UPDATE_UBX_MARKER,     original: UPDATE_UBX_ORIGINAL,     patched: UPDATE_UBX_PATCHED     },
+    { marker: UPDATE_TOAST_MARKER,   original: UPDATE_TOAST_ORIGINAL,   patched: UPDATE_TOAST_PATCHED   },
 ];
 
 /**
