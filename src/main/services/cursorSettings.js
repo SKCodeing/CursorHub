@@ -348,19 +348,29 @@ const UPDATE_NOTIFY_AVAIL_MARKER   = "/*__FLY_CURSOR_NO_NOTIFY_AVAILABLE__*/";
 const UPDATE_NOTIFY_AVAIL_ORIGINAL = "onUpdateAvailable(e){if(!this.shouldShowNotification())return;const t=e.productVersion;t&&this.notificationService.prompt(Id.Info,F(12643,null),";
 const UPDATE_NOTIFY_AVAIL_PATCHED  = `onUpdateAvailable(e){if(!this.shouldShowNotification())return;${UPDATE_NOTIFY_AVAIL_MARKER}return;const t=e.productVersion;t&&this.notificationService.prompt(Id.Info,F(12643,null),`;
 
-// patch 7 ── setShowing（updateNotificationService 的核心开关，彻底阻断所有弹窗路径）
-const UPDATE_SET_SHOWING_MARKER   = "/*__FLY_CURSOR_NO_SET_SHOWING__*/";
-const UPDATE_SET_SHOWING_ORIGINAL = "setShowing(e){this.showing.value!==e&&this.showing.change(e)}";
-const UPDATE_SET_SHOWING_PATCHED  = `setShowing(e){if(e){return;}/*${UPDATE_SET_SHOWING_MARKER}*/this.showing.value!==e&&this.showing.change(e)}`;
+// patch 5 ── CSS 注入：隐藏所有更新弹窗 UI（兜底方案，覆盖所有未知路径）
+const UPDATE_CSS_MARKER   = "/*__FLY_CURSOR_HIDE_UPDATE_CSS__*/";
+const UPDATE_CSS_PATCHED  = `
+${UPDATE_CSS_MARKER}
+;(function(){
+  try {
+    var s = document.createElement('style');
+    s.id = 'fly-cursor-hide-update';
+    s.textContent = [
+      '.update-notification-outer-container{display:none!important;}',
+      '.update-notification-container{display:none!important;}',
+      '.minor-version-notification-container{display:none!important;}',
+      '.notifications-toasts .notification-toast{display:none!important;}'
+    ].join('');
+    document.head.appendChild(s);
+  } catch(e) {}
+})();`;
 
 const ALL_PATCHES = [
-    { marker: UPDATE_POPUP_MARKER,         original: UPDATE_POPUP_ORIGINAL,         patched: UPDATE_POPUP_PATCHED         },
-    { marker: UPDATE_NOTIFY_MARKER,        original: UPDATE_NOTIFY_ORIGINAL,        patched: UPDATE_NOTIFY_PATCHED        },
-    { marker: UPDATE_CHECKON_MARKER,       original: UPDATE_CHECKON_ORIGINAL,       patched: UPDATE_CHECKON_PATCHED       },
-    { marker: UPDATE_SIDEBAR_MARKER,       original: UPDATE_SIDEBAR_ORIGINAL,       patched: UPDATE_SIDEBAR_PATCHED       },
-    { marker: UPDATE_STATE_MARKER,         original: UPDATE_STATE_ORIGINAL,         patched: UPDATE_STATE_PATCHED         },
-    { marker: UPDATE_NOTIFY_AVAIL_MARKER,  original: UPDATE_NOTIFY_AVAIL_ORIGINAL,  patched: UPDATE_NOTIFY_AVAIL_PATCHED  },
-    { marker: UPDATE_SET_SHOWING_MARKER,   original: UPDATE_SET_SHOWING_ORIGINAL,   patched: UPDATE_SET_SHOWING_PATCHED   },
+    { marker: UPDATE_POPUP_MARKER,   original: UPDATE_POPUP_ORIGINAL,   patched: UPDATE_POPUP_PATCHED   },
+    { marker: UPDATE_NOTIFY_MARKER,  original: UPDATE_NOTIFY_ORIGINAL,  patched: UPDATE_NOTIFY_PATCHED  },
+    { marker: UPDATE_CHECKON_MARKER, original: UPDATE_CHECKON_ORIGINAL, patched: UPDATE_CHECKON_PATCHED },
+    { marker: UPDATE_SIDEBAR_MARKER, original: UPDATE_SIDEBAR_ORIGINAL, patched: UPDATE_SIDEBAR_PATCHED },
 ];
 
 /**
@@ -380,17 +390,33 @@ function _patchUpdatePopup(disable) {
 
     const warnings = [];
 
+    // patch 1-4：字符串替换
     for (const { marker, original, patched } of ALL_PATCHES) {
         if (disable) {
-            if (content.includes(marker)) continue; // 已 patch，幂等
+            if (content.includes(marker)) continue;
             if (!content.includes(original)) {
-                warnings.push(`找不到目标代码片段（Cursor 版本可能已更新）: ${marker}`);
+                warnings.push(`找不到目标代码片段: ${marker}`);
                 continue;
             }
             content = content.replace(original, patched);
         } else {
-            if (!content.includes(marker)) continue; // 未 patch，无需恢复
+            if (!content.includes(marker)) continue;
             content = content.replace(patched, original);
+        }
+    }
+
+    // patch 5：CSS 注入（追加到文件末尾）
+    if (disable) {
+        if (!content.includes(UPDATE_CSS_MARKER)) {
+            content = content + UPDATE_CSS_PATCHED;
+        }
+    } else {
+        // 恢复：移除追加的 CSS 注入块
+        const idx = content.indexOf(UPDATE_CSS_MARKER);
+        if (idx > 0) {
+            // 往前找换行符，截断到注入点之前
+            const cutPos = content.lastIndexOf("\n", idx - 1);
+            content = content.slice(0, cutPos > 0 ? cutPos : idx);
         }
     }
 
