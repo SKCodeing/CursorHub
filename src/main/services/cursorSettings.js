@@ -349,8 +349,9 @@ const UPDATE_NOTIFY_AVAIL_ORIGINAL = "onUpdateAvailable(e){if(!this.shouldShowNo
 const UPDATE_NOTIFY_AVAIL_PATCHED  = `onUpdateAvailable(e){if(!this.shouldShowNotification())return;${UPDATE_NOTIFY_AVAIL_MARKER}return;const t=e.productVersion;t&&this.notificationService.prompt(Id.Info,F(12643,null),`;
 
 // patch 5 ── CSS 注入：隐藏所有更新弹窗 UI（兜底方案，覆盖所有未知路径）
-const UPDATE_CSS_MARKER   = "/*__FLY_CURSOR_HIDE_UPDATE_CSS__*/";
-const UPDATE_CSS_PATCHED  = `
+// composer-warning-popup 是弹窗的真实 class（通过 DevTools 确认）
+const UPDATE_CSS_MARKER  = "/*__FLY_CURSOR_HIDE_UPDATE_CSS__*/";
+const UPDATE_CSS_PATCHED = `
 ${UPDATE_CSS_MARKER}
 ;(function(){
   try {
@@ -360,7 +361,8 @@ ${UPDATE_CSS_MARKER}
       '.update-notification-outer-container{display:none!important;}',
       '.update-notification-container{display:none!important;}',
       '.minor-version-notification-container{display:none!important;}',
-      '.notifications-toasts .notification-toast{display:none!important;}'
+      '.notifications-toasts .notification-toast{display:none!important;}',
+      '.composer-warning-popup{display:none!important;}'
     ].join('');
     document.head.appendChild(s);
   } catch(e) {}
