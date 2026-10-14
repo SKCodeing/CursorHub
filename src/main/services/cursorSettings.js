@@ -366,11 +366,17 @@ ${UPDATE_CSS_MARKER}
   } catch(e) {}
 })();`;
 
+// patch 6 ── ubx 内联样式：隐藏 pbx 弹窗容器（display:flex -> none）
+const UPDATE_UBX_MARKER   = "/*__FLY_CURSOR_HIDE_UBX__*/";
+const UPDATE_UBX_ORIGINAL = 'ubx={width:"340px","background-color":"var(--vscode-editorWidget-background)","backdrop-filter":"blur(40px)","box-shadow":"0 4px 8px var(--vscode-inlineChat-shadow)",padding:"8px","padding-top":"6px","border-color":"var(--vscode-notifications-border)","border-radius":"7px","box-sizing":"border-box","border-width":"1px","border-style":"solid",display:"flex","flex-direction":"column",opacity:"1"';
+const UPDATE_UBX_PATCHED  = `${UPDATE_UBX_MARKER}${UPDATE_UBX_ORIGINAL.replace('display:"flex"', 'display:"none"')}`;
+
 const ALL_PATCHES = [
     { marker: UPDATE_POPUP_MARKER,   original: UPDATE_POPUP_ORIGINAL,   patched: UPDATE_POPUP_PATCHED   },
     { marker: UPDATE_NOTIFY_MARKER,  original: UPDATE_NOTIFY_ORIGINAL,  patched: UPDATE_NOTIFY_PATCHED  },
     { marker: UPDATE_CHECKON_MARKER, original: UPDATE_CHECKON_ORIGINAL, patched: UPDATE_CHECKON_PATCHED },
     { marker: UPDATE_SIDEBAR_MARKER, original: UPDATE_SIDEBAR_ORIGINAL, patched: UPDATE_SIDEBAR_PATCHED },
+    { marker: UPDATE_UBX_MARKER,     original: UPDATE_UBX_ORIGINAL,     patched: UPDATE_UBX_PATCHED     },
 ];
 
 /**
